@@ -33,7 +33,7 @@ struct RichTextEditor: NSViewRepresentable {
         let textStorage = NSTextStorage()
         textStorage.addLayoutManager(layoutManager)
 
-        let textView = NSTextView(frame: .zero, textContainer: textContainer)
+        let textView = JournalTextView(frame: .zero, textContainer: textContainer)
         textView.delegate = context.coordinator
         textView.allowsUndo = true
         textView.isRichText = true

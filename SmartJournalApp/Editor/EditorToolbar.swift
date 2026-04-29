@@ -60,11 +60,27 @@ struct EditorToolbar: View {
             iconButton("Numbered List", systemImage: "list.number") {
                 run { RichTextCommand.toggleNumberedList($0) }
             }
+            iconButton("Todo List", systemImage: "checklist") {
+                run { RichTextCommand.toggleTodoList($0) }
+            }
             iconButton("Quote", systemImage: "text.quote") {
                 run { RichTextCommand.toggleQuote($0) }
             }
 
             divider
+
+            Menu {
+                Button("2 × 2") { run { RichTextCommand.insertTable($0, rows: 2, columns: 2) } }
+                Button("3 × 3") { run { RichTextCommand.insertTable($0, rows: 3, columns: 3) } }
+                Button("4 × 4") { run { RichTextCommand.insertTable($0, rows: 4, columns: 4) } }
+                Button("5 × 3") { run { RichTextCommand.insertTable($0, rows: 5, columns: 3) } }
+            } label: {
+                Image(systemName: "tablecells")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .frame(width: 30)
+            .help("Insert table")
 
             iconButton("Link (⌘K)", systemImage: "link") {
                 run { RichTextCommand.insertLink($0) }

@@ -65,22 +65,29 @@ enum RichTextCommand {
         applyLinePrefix(tv, kind: .numbered)
     }
 
+    static func toggleTodoList(_ tv: NSTextView) {
+        applyLinePrefix(tv, kind: .todo)
+    }
+
     private enum ListKind {
-        case bullet, numbered
+        case bullet, numbered, todo
         static let bulletRegex  = try! NSRegularExpression(pattern: #"^•\s"#)
         static let numberRegex  = try! NSRegularExpression(pattern: #"^\d+\.\s"#)
+        static let todoRegex    = try! NSRegularExpression(pattern: #"^[☐☑]\s"#)
 
         func matches(_ s: String) -> Bool {
             let range = NSRange(s.startIndex..., in: s)
             switch self {
             case .bullet:   return Self.bulletRegex.firstMatch(in: s, range: range) != nil
             case .numbered: return Self.numberRegex.firstMatch(in: s, range: range) != nil
+            case .todo:     return Self.todoRegex.firstMatch(in: s, range: range) != nil
             }
         }
         func prefix(itemNumber: Int) -> String {
             switch self {
             case .bullet:   return "• "
             case .numbered: return "\(itemNumber). "
+            case .todo:     return "☐ "
             }
         }
     }
@@ -90,11 +97,10 @@ enum RichTextCommand {
     private static func stripExistingListPrefix(_ para: NSMutableAttributedString) -> Int {
         let s = para.string
         let range = NSRange(s.startIndex..., in: s)
-        if let m = ListKind.bulletRegex.firstMatch(in: s, range: range), m.range.location == 0 {
-            para.deleteCharacters(in: m.range); return m.range.length
-        }
-        if let m = ListKind.numberRegex.firstMatch(in: s, range: range), m.range.location == 0 {
-            para.deleteCharacters(in: m.range); return m.range.length
+        for regex in [ListKind.bulletRegex, ListKind.numberRegex, ListKind.todoRegex] {
+            if let m = regex.firstMatch(in: s, range: range), m.range.location == 0 {
+                para.deleteCharacters(in: m.range); return m.range.length
+            }
         }
         return 0
     }
@@ -215,6 +221,59 @@ enum RichTextCommand {
 
         storage.replaceCharacters(in: paraRange, with: result)
         tv.didChangeText()
+    }
+
+    // MARK: Table
+
+    static func insertTable(_ tv: NSTextView, rows: Int, columns: Int) {
+        guard rows > 0, columns > 0, let storage = tv.textStorage else { return }
+
+        let table = NSTextTable()
+        table.numberOfColumns = columns
+        table.layoutAlgorithm = .automaticLayoutAlgorithm
+        table.collapsesBorders = true
+        table.hidesEmptyCells = false
+
+        let baseFont  = (tv.typingAttributes[.font] as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        let baseColor = (tv.typingAttributes[.foregroundColor] as? NSColor) ?? .labelColor
+
+        let body = NSMutableAttributedString()
+
+        for r in 0..<rows {
+            for c in 0..<columns {
+                let block = NSTextTableBlock(table: table,
+                                             startingRow: r, rowSpan: 1,
+                                             startingColumn: c, columnSpan: 1)
+                block.setBorderColor(.separatorColor)
+                block.setWidth(1, type: .absoluteValueType, for: .border)
+                block.setWidth(6, type: .absoluteValueType, for: .padding)
+
+                let style = NSMutableParagraphStyle()
+                style.textBlocks = [block]
+
+                let cellText = "  \n"
+                body.append(NSAttributedString(string: cellText, attributes: [
+                    .font: baseFont,
+                    .foregroundColor: baseColor,
+                    .paragraphStyle: style
+                ]))
+            }
+        }
+
+        // Trailing paragraph in default style so the cursor exits the table cleanly.
+        body.append(NSAttributedString(string: "\n", attributes: [
+            .font: baseFont,
+            .foregroundColor: baseColor,
+            .paragraphStyle: NSParagraphStyle.default
+        ]))
+
+        let range = tv.selectedRange
+        guard tv.shouldChangeText(in: range, replacementString: body.string) else { return }
+        storage.replaceCharacters(in: range, with: body)
+        tv.didChangeText()
+
+        // Place the cursor inside the first cell.
+        tv.setSelectedRange(NSRange(location: range.location, length: 0))
     }
 
     // MARK: Link
