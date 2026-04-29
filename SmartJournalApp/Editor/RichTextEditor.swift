@@ -1,13 +1,15 @@
 //
-//  MarkdownEditor.swift
+//  RichTextEditor.swift
 //  SmartJournalApp
 //
 
 import SwiftUI
 import AppKit
 
-struct MarkdownEditor: NSViewRepresentable {
-    @Binding var text: String
+struct RichTextEditor: NSViewRepresentable {
+    @Binding var data: Data?
+    @Binding var plainText: String
+    var bridge: EditorBridge?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -31,11 +33,13 @@ struct MarkdownEditor: NSViewRepresentable {
         let textStorage = NSTextStorage()
         textStorage.addLayoutManager(layoutManager)
 
-        let textView = MarkdownTextView(frame: .zero, textContainer: textContainer)
+        let textView = NSTextView(frame: .zero, textContainer: textContainer)
         textView.delegate = context.coordinator
         textView.allowsUndo = true
-        textView.isRichText = false
-        textView.usesFontPanel = false
+        textView.isRichText = true
+        textView.importsGraphics = true
+        textView.allowsImageEditing = true
+        textView.usesFontPanel = true
         textView.usesRuler = false
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
@@ -46,7 +50,8 @@ struct MarkdownEditor: NSViewRepresentable {
         textView.isContinuousSpellCheckingEnabled = true
         textView.isGrammarCheckingEnabled = true
         textView.smartInsertDeleteEnabled = true
-        textView.font = MarkdownStyle.bodyFont
+        textView.isAutomaticLinkDetectionEnabled = true
+        textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
         textView.textColor = .labelColor
         textView.backgroundColor = .clear
         textView.drawsBackground = false
@@ -57,46 +62,62 @@ struct MarkdownEditor: NSViewRepresentable {
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = .width
-        textView.textContainer?.widthTracksTextView = true
 
-        textView.string = text
-        if let storage = textView.textStorage {
-            MarkdownHighlighter.highlight(storage)
+        if let attr = Self.attributedString(from: data, fallbackPlain: plainText) {
+            textStorage.setAttributedString(attr)
         }
 
         scrollView.documentView = textView
+        bridge?.textView = textView
         return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? MarkdownTextView else { return }
-        if textView.string != text {
-            let selected = textView.selectedRanges
-            textView.string = text
-            // clamp selection to new length
-            let length = (text as NSString).length
-            textView.selectedRanges = selected.compactMap { value -> NSValue? in
+        guard let tv = scrollView.documentView as? NSTextView,
+              let storage = tv.textStorage else { return }
+
+        // Only reload if the bound data changed externally (e.g. switching entries).
+        // We compare on plain string + length to avoid round-tripping RTF on every keystroke.
+        let incoming = Self.attributedString(from: data, fallbackPlain: plainText)
+        if let incoming, incoming.string != storage.string {
+            let selection = tv.selectedRanges
+            storage.setAttributedString(incoming)
+            let length = storage.length
+            tv.selectedRanges = selection.compactMap { value in
                 let r = value.rangeValue
                 let loc = min(r.location, length)
                 let len = min(r.length, length - loc)
                 return NSValue(range: NSRange(location: loc, length: len))
             }
-            if let storage = textView.textStorage {
-                MarkdownHighlighter.highlight(storage)
-            }
         }
     }
 
+    static func attributedString(from data: Data?, fallbackPlain: String) -> NSAttributedString? {
+        if let data, !data.isEmpty,
+           let attr = NSAttributedString(rtf: data, documentAttributes: nil) {
+            return attr
+        }
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+            .foregroundColor: NSColor.labelColor
+        ]
+        return NSAttributedString(string: fallbackPlain, attributes: attrs)
+    }
+
     final class Coordinator: NSObject, NSTextViewDelegate {
-        var parent: MarkdownEditor
-        init(_ parent: MarkdownEditor) { self.parent = parent }
+        var parent: RichTextEditor
+        init(_ parent: RichTextEditor) { self.parent = parent }
 
         func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else { return }
-            parent.text = textView.string
-            if let storage = textView.textStorage {
-                MarkdownHighlighter.highlight(storage)
-            }
+            guard let tv = notification.object as? NSTextView else { return }
+            let attr = tv.attributedString()
+            let fullRange = NSRange(location: 0, length: attr.length)
+            let rtf = (try? attr.data(
+                from: fullRange,
+                documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+            )) ?? Data()
+            parent.data = rtf
+            parent.plainText = attr.string
         }
     }
 }

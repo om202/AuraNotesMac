@@ -121,22 +121,27 @@ private struct EntryRow: View {
 
 private struct EntryEditor: View {
     @Bindable var entry: Entry
+    @State private var bridge = EditorBridge()
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            if entry.text.isEmpty {
-                Text("What's on your mind?")
-                    .foregroundStyle(.tertiary)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .allowsHitTesting(false)
-            }
-            MarkdownEditor(text: $entry.text)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 4)
-                .onChange(of: entry.text) { _, _ in
-                    entry.updatedAt = .now
+        VStack(alignment: .leading, spacing: 0) {
+            EditorToolbar(bridge: bridge)
+            Divider()
+            ZStack(alignment: .topLeading) {
+                if entry.text.isEmpty {
+                    Text("What's on your mind?")
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .allowsHitTesting(false)
                 }
+                RichTextEditor(data: $entry.bodyData, plainText: $entry.text, bridge: bridge)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 4)
+                    .onChange(of: entry.text) { _, _ in
+                        entry.updatedAt = .now
+                    }
+            }
         }
         .navigationTitle(
             entry.createdAt.formatted(.dateTime.weekday(.wide).month().day().year())
