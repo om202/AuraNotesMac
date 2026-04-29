@@ -45,7 +45,6 @@ struct ContentView: View {
                 EntryRow(entry: entry).tag(entry)
             }
         }
-        .navigationTitle("Journal")
         .navigationSplitViewColumnWidth(min: 220, ideal: 280)
         .toolbar {
             ToolbarItem {
@@ -124,26 +123,6 @@ private struct EntryEditor: View {
     @Bindable var entry: Entry
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider()
-            editor
-        }
-    }
-
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(entry.createdAt, format: .dateTime.weekday(.wide).month().day().year())
-                .font(.title2.weight(.semibold))
-            Spacer()
-            Text("Edited \(entry.updatedAt, format: .relative(presentation: .named))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding()
-    }
-
-    private var editor: some View {
         ZStack(alignment: .topLeading) {
             if entry.text.isEmpty {
                 Text("What's on your mind?")
@@ -152,15 +131,16 @@ private struct EntryEditor: View {
                     .padding(.vertical, 12)
                     .allowsHitTesting(false)
             }
-            TextEditor(text: $entry.text)
-                .font(.body)
-                .scrollContentBackground(.hidden)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+            MarkdownEditor(text: $entry.text)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 4)
                 .onChange(of: entry.text) { _, _ in
                     entry.updatedAt = .now
                 }
         }
+        .navigationTitle(
+            entry.createdAt.formatted(.dateTime.weekday(.wide).month().day().year())
+        )
     }
 }
 
