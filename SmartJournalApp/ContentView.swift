@@ -40,12 +40,25 @@ struct ContentView: View {
 
     @ViewBuilder
     private var sidebar: some View {
-        List(selection: $selectedEntry) {
-            ForEach(entries) { entry in
-                EntryRow(entry: entry).tag(entry)
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(groupedEntries, id: \.title) { group in
+                    SectionHeader(title: group.title)
+
+                    ForEach(group.entries) { entry in
+                        EntryRow(entry: entry, isSelected: selectedEntry == entry)
+                            .contentShape(Rectangle())
+                            .onTapGesture { selectedEntry = entry }
+                    }
+                }
             }
+            .padding(.horizontal, Theme.Space.s)
+            .padding(.bottom, Theme.Space.m)
         }
-        .navigationSplitViewColumnWidth(min: 220, ideal: 280)
+        .navigationSplitViewColumnWidth(
+            min: Theme.Size.sidebarMin,
+            ideal: Theme.Size.sidebarIdeal
+        )
         .toolbar {
             ToolbarItem {
                 Button(action: addEntry) {
@@ -56,11 +69,11 @@ struct ContentView: View {
         }
         .overlay {
             if entries.isEmpty {
-                ContentUnavailableView(
-                    "No entries yet",
-                    systemImage: "book.closed",
-                    description: Text("Press ⌘N to write your first entry.")
-                )
+                ContentUnavailableView {
+                    Label("No entries yet", systemImage: "book.closed")
+                } description: {
+                    Text("Press ⌘N to write your first entry.")
+                }
             }
         }
     }
@@ -80,12 +93,16 @@ struct ContentView: View {
                     }
                 }
         } else {
-            ContentUnavailableView(
-                "Select an entry",
-                systemImage: "book",
-                description: Text("Or press ⌘N to start a new one.")
-            )
+            ContentUnavailableView {
+                Label("Select an entry", systemImage: "book")
+            } description: {
+                Text("Or press ⌘N to start a new one.")
+            }
         }
+    }
+
+    private var groupedEntries: [EntryGroup] {
+        EntryGroup.group(entries)
     }
 
     private func addEntry() {
@@ -103,49 +120,185 @@ struct ContentView: View {
     }
 }
 
-private struct EntryRow: View {
-    let entry: Entry
+// MARK: - Sidebar grouping
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(entry.previewTitle)
-                .font(.headline)
-                .lineLimit(1)
-            Text(entry.createdAt, format: .dateTime.month().day().year().hour().minute())
-                .font(.caption)
-                .foregroundStyle(.secondary)
+private struct EntryGroup {
+    let title: String
+    let entries: [Entry]
+
+    static func group(_ entries: [Entry]) -> [EntryGroup] {
+        let cal = Calendar.current
+        let now = Date.now
+        var buckets: [(String, [Entry])] = [
+            ("Today", []),
+            ("Yesterday", []),
+            ("Previous 7 Days", []),
+            ("Previous 30 Days", []),
+            ("Older", [])
+        ]
+
+        for entry in entries {
+            let idx: Int
+            if cal.isDateInToday(entry.createdAt) { idx = 0 }
+            else if cal.isDateInYesterday(entry.createdAt) { idx = 1 }
+            else if let days = cal.dateComponents([.day], from: entry.createdAt, to: now).day {
+                if days < 7 { idx = 2 }
+                else if days < 30 { idx = 3 }
+                else { idx = 4 }
+            } else { idx = 4 }
+            buckets[idx].1.append(entry)
         }
-        .padding(.vertical, 2)
+
+        return buckets.compactMap { (title, items) in
+            items.isEmpty ? nil : EntryGroup(title: title, entries: items)
+        }
     }
 }
+
+// MARK: - Section header
+
+private struct SectionHeader: View {
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(.primary)
+                .padding(.top, Theme.Space.l)
+                .padding(.bottom, Theme.Space.s)
+                .padding(.horizontal, Theme.Space.s)
+            Divider()
+        }
+    }
+}
+
+// MARK: - Sidebar row
+
+private struct EntryRow: View {
+    let entry: Entry
+    let isSelected: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.previewTitle)
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+                    .foregroundStyle(isSelected ? Color.white : .primary)
+
+                HStack(spacing: 6) {
+                    Text(dateLabel)
+                        .foregroundStyle(isSelected ? Color.white : .primary)
+                    Text(snippet)
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.85) : .secondary)
+                        .lineLimit(1)
+                }
+                .font(.system(size: 12))
+            }
+            .padding(.vertical, Theme.Space.s)
+            .padding(.horizontal, Theme.Space.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Radius.s, style: .continuous)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+            )
+
+            if !isSelected {
+                Divider()
+            }
+        }
+    }
+
+    private var dateLabel: String {
+        let cal = Calendar.current
+        let date = entry.createdAt
+        if cal.isDateInToday(date) {
+            return date.formatted(.dateTime.hour().minute())
+        }
+        if cal.isDateInYesterday(date) {
+            return "Yesterday"
+        }
+        if let days = cal.dateComponents([.day], from: date, to: .now).day, days < 7 {
+            return date.formatted(.dateTime.weekday(.wide))
+        }
+        return date.formatted(.dateTime.month(.defaultDigits).day().year(.twoDigits))
+    }
+
+    private var snippet: String {
+        let lines = entry.text.split(whereSeparator: \.isNewline)
+        let secondLine = lines.dropFirst().first.map(String.init)?
+            .trimmingCharacters(in: .whitespaces) ?? ""
+        return secondLine.isEmpty ? "No additional text" : secondLine
+    }
+}
+
+// MARK: - Editor
 
 private struct EntryEditor: View {
     @Bindable var entry: Entry
     @State private var bridge = EditorBridge()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                header
+                editorBody
+            }
+            .frame(maxWidth: Theme.Size.editorMaxWidth, alignment: .leading)
+            .padding(.horizontal, Theme.Space.xxl)
+            .padding(.top, Theme.Space.xxl)
+            .padding(.bottom, 96)
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .background(Color(nsColor: .textBackgroundColor))
+        .overlay(alignment: .bottom) {
             EditorToolbar(bridge: bridge)
-            Divider()
-            ZStack(alignment: .topLeading) {
-                if entry.text.isEmpty {
-                    Text("What's on your mind?")
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .allowsHitTesting(false)
-                }
-                RichTextEditor(data: $entry.bodyData, plainText: $entry.text, bridge: bridge)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 4)
-                    .onChange(of: entry.text) { _, _ in
-                        entry.updatedAt = .now
-                    }
+                .padding(.bottom, Theme.Space.l)
+                .padding(.horizontal, Theme.Space.l)
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Text(entry.createdAt, format: .dateTime.weekday(.wide).month(.wide).day().year())
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.primary)
+
+            HStack(spacing: Theme.Space.s) {
+                Text(metadataLine)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
         }
-        .navigationTitle(
-            entry.createdAt.formatted(.dateTime.weekday(.wide).month().day().year())
-        )
+    }
+
+    private var editorBody: some View {
+        ZStack(alignment: .topLeading) {
+            if entry.text.isEmpty {
+                Text("What's on your mind?")
+                    .font(.system(size: Theme.FontSize.body))
+                    .foregroundStyle(.tertiary)
+                    .allowsHitTesting(false)
+            }
+            RichTextEditor(data: $entry.bodyData, plainText: $entry.text, bridge: bridge)
+                .frame(minHeight: 480)
+                .onChange(of: entry.text) { _, _ in
+                    entry.updatedAt = .now
+                }
+        }
+    }
+
+    private var metadataLine: String {
+        let words = entry.text
+            .split { $0.isWhitespace || $0.isNewline }
+            .count
+        let wordLabel = words == 1 ? "word" : "words"
+        let edited = RelativeDateTimeFormatter()
+        edited.unitsStyle = .short
+        let editedString = edited.localizedString(for: entry.updatedAt, relativeTo: .now)
+        return "\(words) \(wordLabel)  ·  edited \(editedString)"
     }
 }
 

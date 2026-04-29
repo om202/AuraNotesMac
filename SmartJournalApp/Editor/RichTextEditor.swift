@@ -26,6 +26,7 @@ struct RichTextEditor: NSViewRepresentable {
             size: NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
         )
         textContainer.widthTracksTextView = true
+        textContainer.lineFragmentPadding = 0
 
         let layoutManager = NSLayoutManager()
         layoutManager.addTextContainer(textContainer)
@@ -55,7 +56,7 @@ struct RichTextEditor: NSViewRepresentable {
         textView.textColor = .labelColor
         textView.backgroundColor = .clear
         textView.drawsBackground = false
-        textView.textContainerInset = NSSize(width: 8, height: 12)
+        textView.textContainerInset = .zero
         textView.minSize = NSSize(width: 0, height: 0)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
                                   height: CGFloat.greatestFiniteMagnitude)

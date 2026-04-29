@@ -9,8 +9,11 @@ import AppKit
 struct EditorToolbar: View {
     let bridge: EditorBridge
 
+    private let iconSize: CGFloat = 16
+    private let buttonSize: CGFloat = 32
+
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: Theme.Space.s) {
             iconButton("Undo", systemImage: "arrow.uturn.backward") {
                 run { RichTextCommand.performUndo($0) }
             }
@@ -32,9 +35,10 @@ struct EditorToolbar: View {
                     .keyboardShortcut("0", modifiers: .command)
             } label: {
                 Label("Style", systemImage: "textformat.size")
+                    .font(.system(size: 13))
             }
             .menuStyle(.borderlessButton)
-            .frame(width: 70)
+            .frame(width: 86)
             .help("Heading style (⌘1 / ⌘2 / ⌘3 / ⌘0)")
 
             divider
@@ -76,31 +80,42 @@ struct EditorToolbar: View {
                 Button("5 × 3") { run { RichTextCommand.insertTable($0, rows: 5, columns: 3) } }
             } label: {
                 Image(systemName: "tablecells")
+                    .font(.system(size: iconSize, weight: .regular))
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
-            .frame(width: 30)
+            .frame(width: buttonSize)
             .help("Insert table")
 
             iconButton("Link (⌘K)", systemImage: "link") {
                 run { RichTextCommand.insertLink($0) }
             }
-
-            Spacer()
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .controlSize(.small)
+        .padding(.horizontal, Theme.Space.m)
+        .padding(.vertical, Theme.Space.s)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.regularMaterial)
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
     }
 
     private var divider: some View {
-        Divider().frame(height: 14).padding(.horizontal, 4)
+        Divider()
+            .frame(height: 18)
+            .padding(.horizontal, Theme.Space.s)
     }
 
     private func iconButton(_ help: String, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .frame(width: 22, height: 22)
+                .font(.system(size: iconSize, weight: .regular))
+                .frame(width: buttonSize, height: buttonSize)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
         .help(help)
