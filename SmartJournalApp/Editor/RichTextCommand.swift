@@ -72,27 +72,15 @@ enum RichTextCommand {
     // MARK: List continuation
 
     enum DetectedList {
-        case bullet
-        case numbered(Int)
-        case todo
+        case bullet(prefixLength: Int)
+        case numbered(value: Int, prefixLength: Int)
+        case todo(prefixLength: Int)
 
-        /// The prefix as it appears on the current line (used for length math).
-        /// For todo, both `☐ ` and `☑ ` have the same UTF-16 length, so the
-        /// canonical form is fine.
-        var prefix: String {
+        /// UTF-16 length of the prefix on the source line.
+        var prefixLength: Int {
             switch self {
-            case .bullet:           return "• "
-            case .numbered(let n):  return "\(n). "
-            case .todo:             return "☐ "
-            }
-        }
-
-        /// The prefix to insert when continuing the list on a new line.
-        var continuation: String {
-            switch self {
-            case .bullet:           return "• "
-            case .numbered(let n):  return "\(n + 1). "
-            case .todo:             return "☐ "
+            case .bullet(let l), .todo(let l):    return l
+            case .numbered(_, let l):             return l
             }
         }
     }
@@ -100,25 +88,93 @@ enum RichTextCommand {
     /// Detects a list prefix at the start of `line`. Returns `nil` for
     /// non-list paragraphs.
     static func detectList(in line: String) -> DetectedList? {
-        if line.hasPrefix("• ") { return .bullet }
-        if line.hasPrefix("☐ ") || line.hasPrefix("☑ ") { return .todo }
         let range = NSRange(line.startIndex..., in: line)
+        if let m = ListKind.bulletRegex.firstMatch(in: line, range: range),
+           m.range.location == 0 {
+            return .bullet(prefixLength: m.range.length)
+        }
+        if let m = ListKind.todoRegex.firstMatch(in: line, range: range),
+           m.range.location == 0 {
+            return .todo(prefixLength: m.range.length)
+        }
         if let m = ListKind.numberRegex.firstMatch(in: line, range: range),
            m.range.location == 0 {
             let prefix = (line as NSString).substring(with: m.range)
             if let dot = prefix.firstIndex(of: "."),
                let n = Int(prefix[..<dot]) {
-                return .numbered(n)
+                return .numbered(value: n, prefixLength: m.range.length)
             }
         }
         return nil
     }
 
+    // MARK: List styling
+
+    /// Width (in points) reserved for the marker + gap. Used both as the
+    /// tab stop on the first line and the head indent for wrapped lines,
+    /// giving Apple-Notes–style hanging indent.
+    private static func listIndent(for baseFont: NSFont) -> CGFloat {
+        baseFont.pointSize * 1.6
+    }
+
+    /// Marker (bullet / checkbox) rendered at 1.3× the base font size,
+    /// followed by a tab.
+    private static func scaledMarkerPrefix(
+        marker: String,
+        baseAttrs: [NSAttributedString.Key: Any]
+    ) -> NSAttributedString {
+        let baseFont = (baseAttrs[.font] as? NSFont)
+            ?? NSFont.systemFont(ofSize: Theme.FontSize.body)
+        let markerFont = NSFont(
+            descriptor: baseFont.fontDescriptor,
+            size: baseFont.pointSize * 1.3
+        ) ?? baseFont
+
+        var markerAttrs = baseAttrs
+        markerAttrs[.font] = markerFont
+
+        let result = NSMutableAttributedString()
+        result.append(NSAttributedString(string: marker, attributes: markerAttrs))
+        result.append(NSAttributedString(string: "\t", attributes: baseAttrs))
+        return result
+    }
+
+    static func bulletPrefix(
+        baseAttrs: [NSAttributedString.Key: Any]
+    ) -> NSAttributedString {
+        scaledMarkerPrefix(marker: "•", baseAttrs: baseAttrs)
+    }
+
+    static func todoPrefix(
+        baseAttrs: [NSAttributedString.Key: Any]
+    ) -> NSAttributedString {
+        scaledMarkerPrefix(marker: "☐", baseAttrs: baseAttrs)
+    }
+
+    static func numberedPrefix(
+        value: Int,
+        baseAttrs: [NSAttributedString.Key: Any]
+    ) -> NSAttributedString {
+        NSAttributedString(string: "\(value).\t", attributes: baseAttrs)
+    }
+
+    /// Hanging-indent paragraph style shared by all list kinds.
+    static func listParagraphStyle(baseFont: NSFont) -> NSParagraphStyle {
+        let stop = listIndent(for: baseFont)
+        let style = NSMutableParagraphStyle()
+        style.firstLineHeadIndent = 0
+        style.headIndent = stop
+        style.tabStops = [
+            NSTextTab(textAlignment: .left, location: stop, options: [:])
+        ]
+        return style
+    }
+
     private enum ListKind {
         case bullet, numbered, todo
-        static let bulletRegex  = try! NSRegularExpression(pattern: #"^•\s"#)
-        static let numberRegex  = try! NSRegularExpression(pattern: #"^\d+\.\s"#)
-        static let todoRegex    = try! NSRegularExpression(pattern: #"^[☐☑]\s"#)
+        static let bulletRegex  = try! NSRegularExpression(pattern: #"^•[ \t]+"#)
+        static let numberRegex  = try! NSRegularExpression(pattern: #"^\d+\.[ \t]+"#)
+        static let todoRegex    = try! NSRegularExpression(pattern: #"^[☐☑][ \t]+"#)
 
         func matches(_ s: String) -> Bool {
             let range = NSRange(s.startIndex..., in: s)
@@ -126,13 +182,6 @@ enum RichTextCommand {
             case .bullet:   return Self.bulletRegex.firstMatch(in: s, range: range) != nil
             case .numbered: return Self.numberRegex.firstMatch(in: s, range: range) != nil
             case .todo:     return Self.todoRegex.firstMatch(in: s, range: range) != nil
-            }
-        }
-        func prefix(itemNumber: Int) -> String {
-            switch self {
-            case .bullet:   return "• "
-            case .numbered: return "\(itemNumber). "
-            case .todo:     return "☐ "
             }
         }
     }
@@ -182,12 +231,39 @@ enum RichTextCommand {
             stripExistingListPrefix(para)
 
             if !allMatch {
-                let prefix = kind.prefix(itemNumber: itemNumber)
-                let attrs = para.length > 0
+                let baseAttrs: [NSAttributedString.Key: Any] = para.length > 0
                     ? para.attributes(at: 0, effectiveRange: nil)
                     : tv.typingAttributes
-                para.insert(NSAttributedString(string: prefix, attributes: attrs), at: 0)
+                let baseFont = (baseAttrs[.font] as? NSFont)
+                    ?? NSFont.systemFont(ofSize: Theme.FontSize.body)
+
+                let prefix: NSAttributedString
+                switch kind {
+                case .bullet:
+                    prefix = bulletPrefix(baseAttrs: baseAttrs)
+                case .numbered:
+                    prefix = numberedPrefix(value: itemNumber, baseAttrs: baseAttrs)
+                case .todo:
+                    prefix = todoPrefix(baseAttrs: baseAttrs)
+                }
+                para.insert(prefix, at: 0)
+
+                if para.length > 0 {
+                    para.addAttribute(
+                        .paragraphStyle,
+                        value: listParagraphStyle(baseFont: baseFont),
+                        range: NSRange(location: 0, length: para.length)
+                    )
+                }
+
                 itemNumber += 1
+            } else if para.length > 0 {
+                // Toggle off: drop any bullet hanging-indent style.
+                para.addAttribute(
+                    .paragraphStyle,
+                    value: NSParagraphStyle.default,
+                    range: NSRange(location: 0, length: para.length)
+                )
             }
             result.append(para)
         }
