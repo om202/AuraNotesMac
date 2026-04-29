@@ -58,92 +58,162 @@ enum RichTextCommand {
     // MARK: Lists
 
     static func toggleBulletList(_ tv: NSTextView) {
-        applyList(tv, marker: NSTextList(markerFormat: .disc, options: 0))
+        applyLinePrefix(tv, kind: .bullet)
     }
 
     static func toggleNumberedList(_ tv: NSTextView) {
-        applyList(tv, marker: NSTextList(markerFormat: .decimal, options: 0))
+        applyLinePrefix(tv, kind: .numbered)
     }
 
-    private static func applyList(_ tv: NSTextView, marker: NSTextList) {
-        let nsString = tv.string as NSString
-        let paraRange = nsString.paragraphRange(for: tv.selectedRange)
-        guard tv.shouldChangeText(in: paraRange, replacementString: nil) else { return }
+    private enum ListKind {
+        case bullet, numbered
+        static let bulletRegex  = try! NSRegularExpression(pattern: #"^•\s"#)
+        static let numberRegex  = try! NSRegularExpression(pattern: #"^\d+\.\s"#)
 
-        let storage = tv.textStorage!
-        storage.beginEditing()
-
-        // Detect: are all paragraphs already in this kind of list? If so, strip.
-        var allHaveSameList = true
-        storage.enumerateAttribute(.paragraphStyle, in: paraRange, options: []) { value, _, stop in
-            let style = value as? NSParagraphStyle
-            let lists = style?.textLists ?? []
-            if lists.last?.markerFormat != marker.markerFormat {
-                allHaveSameList = false
-                stop.pointee = true
+        func matches(_ s: String) -> Bool {
+            let range = NSRange(s.startIndex..., in: s)
+            switch self {
+            case .bullet:   return Self.bulletRegex.firstMatch(in: s, range: range) != nil
+            case .numbered: return Self.numberRegex.firstMatch(in: s, range: range) != nil
             }
         }
-
-        let newStyle = NSMutableParagraphStyle()
-        if !allHaveSameList {
-            newStyle.textLists = [marker]
-            newStyle.firstLineHeadIndent = 0
-            newStyle.headIndent = 24
+        func prefix(itemNumber: Int) -> String {
+            switch self {
+            case .bullet:   return "• "
+            case .numbered: return "\(itemNumber). "
+            }
         }
-        storage.addAttribute(.paragraphStyle, value: newStyle, range: paraRange)
-        storage.endEditing()
+    }
+
+    /// Strip any existing list prefix at the start of `para`. Returns the length removed.
+    @discardableResult
+    private static func stripExistingListPrefix(_ para: NSMutableAttributedString) -> Int {
+        let s = para.string
+        let range = NSRange(s.startIndex..., in: s)
+        if let m = ListKind.bulletRegex.firstMatch(in: s, range: range), m.range.location == 0 {
+            para.deleteCharacters(in: m.range); return m.range.length
+        }
+        if let m = ListKind.numberRegex.firstMatch(in: s, range: range), m.range.location == 0 {
+            para.deleteCharacters(in: m.range); return m.range.length
+        }
+        return 0
+    }
+
+    private static func applyLinePrefix(_ tv: NSTextView, kind: ListKind) {
+        let storage = tv.textStorage!
+        let nsString = storage.string as NSString
+        let paraRange = nsString.paragraphRange(for: tv.selectedRange)
+        guard tv.shouldChangeText(in: paraRange, replacementString: "") else { return }
+
+        let original = storage.attributedSubstring(from: paraRange)
+        let originalNS = original.string as NSString
+
+        // Collect paragraph ranges within the affected region.
+        var paragraphs: [NSRange] = []
+        var i = 0
+        while i < originalNS.length {
+            let pr = originalNS.paragraphRange(for: NSRange(location: i, length: 0))
+            paragraphs.append(pr)
+            i = pr.location + pr.length
+            if pr.length == 0 { break }
+        }
+        if paragraphs.isEmpty { paragraphs = [NSRange(location: 0, length: 0)] }
+
+        // Toggle off only if every non-empty paragraph already starts with this kind of prefix.
+        let nonEmpty = paragraphs.filter { $0.length > 0 }
+        let allMatch = !nonEmpty.isEmpty && nonEmpty.allSatisfy { kind.matches(originalNS.substring(with: $0)) }
+
+        let result = NSMutableAttributedString()
+        var itemNumber = 1
+
+        for pr in paragraphs {
+            let para = (original.attributedSubstring(from: pr).mutableCopy() as! NSMutableAttributedString)
+            stripExistingListPrefix(para)
+
+            if !allMatch {
+                let prefix = kind.prefix(itemNumber: itemNumber)
+                let attrs = para.length > 0
+                    ? para.attributes(at: 0, effectiveRange: nil)
+                    : tv.typingAttributes
+                para.insert(NSAttributedString(string: prefix, attributes: attrs), at: 0)
+                itemNumber += 1
+            }
+            result.append(para)
+        }
+
+        storage.replaceCharacters(in: paraRange, with: result)
         tv.didChangeText()
     }
 
     // MARK: Quote
 
+    private static let quotePrefix = "▎ "
+
     static func toggleQuote(_ tv: NSTextView) {
-        let nsString = tv.string as NSString
-        let paraRange = nsString.paragraphRange(for: tv.selectedRange)
-        guard tv.shouldChangeText(in: paraRange, replacementString: nil) else { return }
-
         let storage = tv.textStorage!
-        storage.beginEditing()
+        let nsString = storage.string as NSString
+        let paraRange = nsString.paragraphRange(for: tv.selectedRange)
+        guard tv.shouldChangeText(in: paraRange, replacementString: "") else { return }
 
-        // Detect if current paragraph is already quoted (we mark it via headIndent + italic).
-        var allItalic = true
-        storage.enumerateAttribute(.font, in: paraRange, options: []) { value, _, stop in
-            let f = (value as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
-            if !f.fontDescriptor.symbolicTraits.contains(.italic) {
-                allItalic = false; stop.pointee = true
-            }
+        let original = storage.attributedSubstring(from: paraRange)
+        let originalNS = original.string as NSString
+
+        var paragraphs: [NSRange] = []
+        var i = 0
+        while i < originalNS.length {
+            let pr = originalNS.paragraphRange(for: NSRange(location: i, length: 0))
+            paragraphs.append(pr)
+            i = pr.location + pr.length
+            if pr.length == 0 { break }
+        }
+        if paragraphs.isEmpty { paragraphs = [NSRange(location: 0, length: 0)] }
+
+        let nonEmpty = paragraphs.filter { $0.length > 0 }
+        let allQuoted = !nonEmpty.isEmpty && nonEmpty.allSatisfy {
+            originalNS.substring(with: $0).hasPrefix(quotePrefix)
         }
 
-        if allItalic {
-            // Strip italic + reset paragraph style to default
-            storage.enumerateAttribute(.font, in: paraRange, options: []) { value, sub, _ in
-                let f = (value as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
-                var traits = f.fontDescriptor.symbolicTraits
-                traits.remove(.italic)
-                let desc = f.fontDescriptor.withSymbolicTraits(traits)
-                let newFont = NSFont(descriptor: desc, size: f.pointSize) ?? f
-                storage.addAttribute(.font, value: newFont, range: sub)
+        let quoteStyle: NSMutableParagraphStyle = {
+            let s = NSMutableParagraphStyle()
+            s.firstLineHeadIndent = 0
+            s.headIndent = 16
+            return s
+        }()
+
+        let prefixNSLen = (quotePrefix as NSString).length
+        let result = NSMutableAttributedString()
+
+        for pr in paragraphs {
+            let para = (original.attributedSubstring(from: pr).mutableCopy() as! NSMutableAttributedString)
+
+            if para.string.hasPrefix(quotePrefix) {
+                para.deleteCharacters(in: NSRange(location: 0, length: prefixNSLen))
+                if para.length > 0 {
+                    para.addAttribute(.paragraphStyle,
+                                      value: NSParagraphStyle.default,
+                                      range: NSRange(location: 0, length: para.length))
+                }
             }
-            storage.addAttribute(.paragraphStyle, value: NSParagraphStyle.default, range: paraRange)
-            storage.removeAttribute(.foregroundColor, range: paraRange)
-            storage.addAttribute(.foregroundColor, value: NSColor.labelColor, range: paraRange)
-        } else {
-            storage.enumerateAttribute(.font, in: paraRange, options: []) { value, sub, _ in
-                let f = (value as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
-                var traits = f.fontDescriptor.symbolicTraits
-                traits.insert(.italic)
-                let desc = f.fontDescriptor.withSymbolicTraits(traits)
-                let newFont = NSFont(descriptor: desc, size: f.pointSize) ?? f
-                storage.addAttribute(.font, value: newFont, range: sub)
+
+            if !allQuoted {
+                let baseAttrs: [NSAttributedString.Key: Any] = para.length > 0
+                    ? para.attributes(at: 0, effectiveRange: nil)
+                    : tv.typingAttributes
+                var prefixAttrs = baseAttrs
+                prefixAttrs[.foregroundColor] = NSColor.tertiaryLabelColor
+                prefixAttrs[.paragraphStyle] = quoteStyle
+                para.insert(NSAttributedString(string: quotePrefix, attributes: prefixAttrs), at: 0)
+                if para.length > prefixNSLen {
+                    para.addAttribute(.paragraphStyle,
+                                      value: quoteStyle,
+                                      range: NSRange(location: prefixNSLen, length: para.length - prefixNSLen))
+                }
             }
-            let style = NSMutableParagraphStyle()
-            style.firstLineHeadIndent = 16
-            style.headIndent = 16
-            storage.addAttribute(.paragraphStyle, value: style, range: paraRange)
-            storage.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: paraRange)
+
+            result.append(para)
         }
 
-        storage.endEditing()
+        storage.replaceCharacters(in: paraRange, with: result)
         tv.didChangeText()
     }
 
