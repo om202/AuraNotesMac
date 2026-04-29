@@ -34,6 +34,7 @@ enum MarkdownConverter {
                 let mono = NSFont.monospacedSystemFont(ofSize: baseFont.pointSize, weight: .regular)
                 var attrs = baseAttrs
                 attrs[.font] = mono
+                attrs[.foregroundColor] = Theme.EditorColor.code
                 result.append(NSAttributedString(string: raw, attributes: attrs))
                 appendNewlineIfNotLast(into: result, idx: i, total: lines.count, attrs: baseAttrs)
                 i += 1
@@ -68,6 +69,7 @@ enum MarkdownConverter {
                 }()
                 var attrs = baseAttrs
                 attrs[.font] = family.font(size: size, weight: weight)
+                attrs[.foregroundColor] = RichTextCommand.headingColor(for: h.level)
                 result.append(parseInline(h.text, baseAttrs: attrs))
                 numberCounter = 0
             } else if let (n, text) = matchNumbered(line) {
@@ -110,7 +112,7 @@ enum MarkdownConverter {
                 style.firstLineHeadIndent = 0
                 style.headIndent = 16
                 var prefAttrs = baseAttrs
-                prefAttrs[.foregroundColor] = NSColor.tertiaryLabelColor
+                prefAttrs[.foregroundColor] = Theme.EditorColor.quote
                 let para = NSMutableAttributedString()
                 para.append(NSAttributedString(string: "▎ ", attributes: prefAttrs))
                 para.append(parseInline(text, baseAttrs: baseAttrs))
@@ -344,7 +346,7 @@ enum MarkdownConverter {
                 if let url = URL(string: urlStr) {
                     var attrs = baseAttrs
                     attrs[.link] = url
-                    attrs[.foregroundColor] = NSColor.linkColor
+                    attrs[.foregroundColor] = Theme.EditorColor.link
                     attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
                     out.append(parseInline(label, baseAttrs: attrs))
                     i = pClose + 1
@@ -367,6 +369,7 @@ enum MarkdownConverter {
                     let mono = NSFont.monospacedSystemFont(ofSize: f.pointSize, weight: .regular)
                     var attrs = baseAttrs
                     attrs[.font] = mono
+                    attrs[.foregroundColor] = Theme.EditorColor.code
                     out.append(NSAttributedString(string: inner, attributes: attrs))
                     i = close + run
                     continue

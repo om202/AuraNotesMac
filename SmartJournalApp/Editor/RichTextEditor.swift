@@ -58,11 +58,12 @@ struct RichTextEditor: NSViewRepresentable {
         textView.font = defaultFont
         textView.typingAttributes = [
             .font: defaultFont,
-            .foregroundColor: NSColor.labelColor
+            .foregroundColor: Theme.EditorColor.body
         ]
-        textView.textColor = .labelColor
-        textView.backgroundColor = .clear
-        textView.drawsBackground = false
+        textView.textColor = Theme.EditorColor.body
+        textView.backgroundColor = Theme.EditorColor.background
+        textView.drawsBackground = true
+        textView.insertionPointColor = Theme.EditorColor.body
         textView.textContainerInset = NSSize(
             width: Theme.Space.xxl,
             height: Theme.Space.xxl
@@ -121,7 +122,7 @@ struct RichTextEditor: NSViewRepresentable {
         }
         let attrs: [NSAttributedString.Key: Any] = [
             .font: family.font(size: Theme.FontSize.body),
-            .foregroundColor: NSColor.labelColor
+            .foregroundColor: Theme.EditorColor.body
         ]
         return NSAttributedString(string: fallbackPlain, attributes: attrs)
     }

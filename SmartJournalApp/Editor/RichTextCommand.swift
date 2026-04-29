@@ -54,6 +54,8 @@ enum RichTextCommand {
                 ? EditorFont.currentFamily.font(size: f.pointSize)
                 : NSFont.monospacedSystemFont(ofSize: f.pointSize, weight: .regular)
             storage.addAttribute(.font, value: newFont, range: sub)
+            let color: NSColor = allMono ? Theme.EditorColor.body : Theme.EditorColor.code
+            storage.addAttribute(.foregroundColor, value: color, range: sub)
         }
         storage.endEditing()
         tv.didChangeText()
@@ -72,6 +74,7 @@ enum RichTextCommand {
             }
         }()
         let newFont = EditorFont.currentFamily.font(size: size, weight: weight)
+        let newColor = headingColor(for: level)
 
         let nsString = tv.string as NSString
         let paraRange = nsString.paragraphRange(for: tv.selectedRange)
@@ -79,13 +82,24 @@ enum RichTextCommand {
         let storage = tv.textStorage!
         storage.beginEditing()
         storage.addAttribute(.font, value: newFont, range: paraRange)
+        storage.addAttribute(.foregroundColor, value: newColor, range: paraRange)
         storage.endEditing()
         tv.didChangeText()
 
         // Update typing attributes so the next keystroke continues the style
         var typing = tv.typingAttributes
         typing[.font] = newFont
+        typing[.foregroundColor] = newColor
         tv.typingAttributes = typing
+    }
+
+    static func headingColor(for level: Int) -> NSColor {
+        switch level {
+        case 1: return Theme.EditorColor.title
+        case 2: return Theme.EditorColor.heading
+        case 3: return Theme.EditorColor.subheading
+        default: return Theme.EditorColor.body
+        }
     }
 
     // MARK: Lists
@@ -154,8 +168,10 @@ enum RichTextCommand {
         marker: String,
         baseAttrs: [NSAttributedString.Key: Any]
     ) -> NSAttributedString {
+        var markerAttrs = baseAttrs
+        markerAttrs[.foregroundColor] = Theme.EditorColor.listMarker
         let result = NSMutableAttributedString()
-        result.append(NSAttributedString(string: marker, attributes: baseAttrs))
+        result.append(NSAttributedString(string: marker, attributes: markerAttrs))
         result.append(NSAttributedString(string: "\t", attributes: baseAttrs))
         return result
     }
@@ -176,7 +192,12 @@ enum RichTextCommand {
         value: Int,
         baseAttrs: [NSAttributedString.Key: Any]
     ) -> NSAttributedString {
-        NSAttributedString(string: "\(value).\t", attributes: baseAttrs)
+        var markerAttrs = baseAttrs
+        markerAttrs[.foregroundColor] = Theme.EditorColor.listMarker
+        let result = NSMutableAttributedString()
+        result.append(NSAttributedString(string: "\(value).", attributes: markerAttrs))
+        result.append(NSAttributedString(string: "\t", attributes: baseAttrs))
+        return result
     }
 
     /// Hanging-indent paragraph style shared by all list kinds.
@@ -348,7 +369,7 @@ enum RichTextCommand {
                     ? para.attributes(at: 0, effectiveRange: nil)
                     : tv.typingAttributes
                 var prefixAttrs = baseAttrs
-                prefixAttrs[.foregroundColor] = NSColor.tertiaryLabelColor
+                prefixAttrs[.foregroundColor] = Theme.EditorColor.quote
                 prefixAttrs[.paragraphStyle] = quoteStyle
                 para.insert(NSAttributedString(string: quotePrefix, attributes: prefixAttrs), at: 0)
                 if para.length > prefixNSLen {
@@ -365,7 +386,7 @@ enum RichTextCommand {
         tv.didChangeText()
 
         var typing = tv.typingAttributes
-        typing[.foregroundColor] = NSColor.labelColor
+        typing[.foregroundColor] = Theme.EditorColor.body
         typing[.paragraphStyle] = allQuoted ? NSParagraphStyle.default : quoteStyle
         tv.typingAttributes = typing
     }
@@ -448,7 +469,7 @@ enum RichTextCommand {
         let display = selected.isEmpty ? urlText : selected
         let attrs: [NSAttributedString.Key: Any] = [
             .link: url,
-            .foregroundColor: NSColor.linkColor,
+            .foregroundColor: Theme.EditorColor.link,
             .underlineStyle: NSUnderlineStyle.single.rawValue,
             .font: (tv.typingAttributes[.font] as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
         ]

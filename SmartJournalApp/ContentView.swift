@@ -241,7 +241,7 @@ private struct EntryEditor: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Color(nsColor: .textBackgroundColor)
+            Color(nsColor: Theme.EditorColor.background)
                 .ignoresSafeArea()
 
             if entry.text.isEmpty {
