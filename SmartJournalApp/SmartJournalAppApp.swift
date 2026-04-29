@@ -8,6 +8,10 @@ import SwiftData
 
 @main
 struct SmartJournalAppApp: App {
+    init() {
+        _ = EditorFont.registerBundledFonts
+    }
+
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([Entry.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)

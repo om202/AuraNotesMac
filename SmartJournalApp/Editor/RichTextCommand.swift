@@ -32,13 +32,13 @@ enum RichTextCommand {
     static func setHeadingLevel(_ tv: NSTextView, level: Int) {
         let (size, weight): (CGFloat, NSFont.Weight) = {
             switch level {
-            case 1: return (28, .bold)
-            case 2: return (22, .bold)
-            case 3: return (18, .semibold)
-            default: return (NSFont.systemFontSize, .regular)
+            case 1: return (Theme.FontSize.title, .bold)
+            case 2: return (Theme.FontSize.heading, .bold)
+            case 3: return (Theme.FontSize.subheading, .semibold)
+            default: return (Theme.FontSize.body, .regular)
             }
         }()
-        let newFont = NSFont.systemFont(ofSize: size, weight: weight)
+        let newFont = EditorFont.currentFamily.font(size: size, weight: weight)
 
         let nsString = tv.string as NSString
         let paraRange = nsString.paragraphRange(for: tv.selectedRange)

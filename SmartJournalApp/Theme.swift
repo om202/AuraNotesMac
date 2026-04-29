@@ -17,7 +17,7 @@ enum Theme {
     }
 
     enum Size {
-        static let editorMaxWidth: CGFloat = 680
+        static let editorMaxWidth: CGFloat = 720
         static let sidebarMin: CGFloat = 240
         static let sidebarIdeal: CGFloat = 280
         static let rowMinHeight: CGFloat = 44
@@ -29,7 +29,10 @@ enum Theme {
     }
 
     enum FontSize {
-        static let body: CGFloat = 16
+        static let body: CGFloat = 18
+        static let title: CGFloat = 34
+        static let heading: CGFloat = 26
+        static let subheading: CGFloat = 21
         static let bodyLineHeightMultiple: CGFloat = 1.5
     }
 }

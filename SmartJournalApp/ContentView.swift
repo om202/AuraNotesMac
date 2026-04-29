@@ -241,15 +241,12 @@ private struct EntryEditor: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Space.xl) {
-                header
-                editorBody
-            }
-            .frame(maxWidth: Theme.Size.editorMaxWidth, alignment: .leading)
-            .padding(.horizontal, Theme.Space.xxl)
-            .padding(.top, Theme.Space.xxl)
-            .padding(.bottom, 96)
-            .frame(maxWidth: .infinity, alignment: .center)
+            editorBody
+                .frame(maxWidth: Theme.Size.editorMaxWidth, alignment: .leading)
+                .padding(.horizontal, Theme.Space.xxl)
+                .padding(.top, Theme.Space.xxl)
+                .padding(.bottom, 96)
+                .frame(maxWidth: .infinity, alignment: .center)
         }
         .background(Color(nsColor: .textBackgroundColor))
         .overlay(alignment: .bottom) {
@@ -257,28 +254,19 @@ private struct EntryEditor: View {
                 .padding(.bottom, Theme.Space.l)
                 .padding(.horizontal, Theme.Space.l)
         }
+        .navigationTitle(titleLine)
+        .navigationSubtitle(metadataLine)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Text(entry.createdAt, format: .dateTime.weekday(.wide).month(.wide).day().year())
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.primary)
-
-            HStack(spacing: Theme.Space.s) {
-                Text(metadataLine)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-        }
+    private var titleLine: String {
+        entry.createdAt.formatted(.dateTime.weekday(.wide).month(.wide).day().year())
     }
 
     private var editorBody: some View {
         ZStack(alignment: .topLeading) {
             if entry.text.isEmpty {
                 Text("What's on your mind?")
-                    .font(.system(size: Theme.FontSize.body))
+                    .font(Font(bridge.fontFamily.font(size: Theme.FontSize.body)))
                     .foregroundStyle(.tertiary)
                     .allowsHitTesting(false)
             }

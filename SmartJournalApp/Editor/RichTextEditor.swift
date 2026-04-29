@@ -34,6 +34,9 @@ struct RichTextEditor: NSViewRepresentable {
         let textStorage = NSTextStorage()
         textStorage.addLayoutManager(layoutManager)
 
+        let family = EditorFont.currentFamily
+        let defaultFont = family.font(size: Theme.FontSize.body)
+
         let textView = JournalTextView(frame: .zero, textContainer: textContainer)
         textView.delegate = context.coordinator
         textView.allowsUndo = true
@@ -52,7 +55,11 @@ struct RichTextEditor: NSViewRepresentable {
         textView.isGrammarCheckingEnabled = true
         textView.smartInsertDeleteEnabled = true
         textView.isAutomaticLinkDetectionEnabled = true
-        textView.font = NSFont.systemFont(ofSize: NSFont.systemFontSize)
+        textView.font = defaultFont
+        textView.typingAttributes = [
+            .font: defaultFont,
+            .foregroundColor: NSColor.labelColor
+        ]
         textView.textColor = .labelColor
         textView.backgroundColor = .clear
         textView.drawsBackground = false
@@ -94,12 +101,16 @@ struct RichTextEditor: NSViewRepresentable {
     }
 
     static func attributedString(from data: Data?, fallbackPlain: String) -> NSAttributedString? {
+        let family = EditorFont.currentFamily
+
         if let data, !data.isEmpty,
            let attr = NSAttributedString(rtf: data, documentAttributes: nil) {
-            return attr
+            let normalized = NSMutableAttributedString(attributedString: attr)
+            EditorFont.applyFamily(family, to: normalized)
+            return normalized
         }
         let attrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: NSFont.systemFontSize),
+            .font: family.font(size: Theme.FontSize.body),
             .foregroundColor: NSColor.labelColor
         ]
         return NSAttributedString(string: fallbackPlain, attributes: attrs)

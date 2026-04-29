@@ -58,6 +58,28 @@ struct EditorToolbar: View {
 
             divider
 
+            Menu {
+                ForEach(EditorFontFamily.allCases) { family in
+                    Button {
+                        bridge.setFontFamily(family)
+                    } label: {
+                        if family == bridge.fontFamily {
+                            Label(family.displayName, systemImage: "checkmark")
+                        } else {
+                            Text(family.displayName)
+                        }
+                    }
+                }
+            } label: {
+                Label(bridge.fontFamily.shortName, systemImage: "textformat")
+                    .font(.system(size: 13))
+            }
+            .menuStyle(.borderlessButton)
+            .frame(width: 78)
+            .help("Editor font (Sans / Serif)")
+
+            divider
+
             iconButton("Bulleted List", systemImage: "list.bullet") {
                 run { RichTextCommand.toggleBulletList($0) }
             }
