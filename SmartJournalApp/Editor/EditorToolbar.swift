@@ -41,23 +41,6 @@ struct EditorToolbar: View {
             .frame(width: 86)
             .help("Heading style (⌘1 / ⌘2 / ⌘3 / ⌘0)")
 
-            divider
-
-            iconButton("Bold (⌘B)", systemImage: "bold") {
-                run { RichTextCommand.toggleBold($0) }
-            }
-            iconButton("Italic (⌘I)", systemImage: "italic") {
-                run { RichTextCommand.toggleItalic($0) }
-            }
-            iconButton("Underline (⌘U)", systemImage: "underline") {
-                run { RichTextCommand.toggleUnderline($0) }
-            }
-            iconButton("Strikethrough", systemImage: "strikethrough") {
-                run { RichTextCommand.toggleStrikethrough($0) }
-            }
-
-            divider
-
             Menu {
                 ForEach(EditorFontFamily.allCases) { family in
                     Button {
@@ -77,6 +60,24 @@ struct EditorToolbar: View {
             .menuStyle(.borderlessButton)
             .frame(width: 78)
             .help("Editor font (Sans / Serif)")
+
+            divider
+
+            iconButton("Bold (⌘B)", systemImage: "bold") {
+                run { RichTextCommand.toggleBold($0) }
+            }
+            iconButton("Italic (⌘I)", systemImage: "italic") {
+                run { RichTextCommand.toggleItalic($0) }
+            }
+            iconButton("Underline (⌘U)", systemImage: "underline") {
+                run { RichTextCommand.toggleUnderline($0) }
+            }
+            iconButton("Strikethrough", systemImage: "strikethrough") {
+                run { RichTextCommand.toggleStrikethrough($0) }
+            }
+            iconButton("Code", systemImage: "curlybraces") {
+                run { RichTextCommand.toggleCode($0) }
+            }
 
             divider
 
@@ -115,15 +116,12 @@ struct EditorToolbar: View {
         }
         .padding(.horizontal, Theme.Space.m)
         .padding(.vertical, Theme.Space.s)
-        .background(
-            Capsule(style: .continuous)
-                .fill(.regularMaterial)
-        )
+        .glassEffect(.regular, in: Capsule(style: .continuous))
         .overlay(
             Capsule(style: .continuous)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                .strokeBorder(.white.opacity(0.10), lineWidth: 1)
         )
-        .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
+        .shadow(color: .black.opacity(0.30), radius: 20, y: 8)
     }
 
     private var divider: some View {

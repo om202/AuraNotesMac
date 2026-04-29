@@ -26,6 +26,39 @@ enum RichTextCommand {
                         on: NSUnderlineStyle.single.rawValue, off: 0)
     }
 
+    static func toggleCode(_ tv: NSTextView) {
+        let range = tv.selectedRange
+
+        if range.length == 0 {
+            var typing = tv.typingAttributes
+            let f = (typing[.font] as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            typing[.font] = f.isFixedPitch
+                ? EditorFont.currentFamily.font(size: f.pointSize)
+                : NSFont.monospacedSystemFont(ofSize: f.pointSize, weight: .regular)
+            tv.typingAttributes = typing
+            return
+        }
+
+        guard tv.shouldChangeText(in: range, replacementString: nil) else { return }
+        let storage = tv.textStorage!
+        storage.beginEditing()
+
+        var allMono = true
+        storage.enumerateAttribute(.font, in: range, options: []) { value, _, stop in
+            let f = (value as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            if !f.isFixedPitch { allMono = false; stop.pointee = true }
+        }
+        storage.enumerateAttribute(.font, in: range, options: []) { value, sub, _ in
+            let f = (value as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            let newFont: NSFont = allMono
+                ? EditorFont.currentFamily.font(size: f.pointSize)
+                : NSFont.monospacedSystemFont(ofSize: f.pointSize, weight: .regular)
+            storage.addAttribute(.font, value: newFont, range: sub)
+        }
+        storage.endEditing()
+        tv.didChangeText()
+    }
+
     // MARK: Headings
 
     /// level 0 = body, 1 = title, 2 = heading, 3 = subheading.

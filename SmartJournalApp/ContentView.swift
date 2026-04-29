@@ -240,19 +240,30 @@ private struct EntryEditor: View {
     @State private var bridge = EditorBridge()
 
     var body: some View {
-        ScrollView {
-            editorBody
-                .frame(maxWidth: Theme.Size.editorMaxWidth, alignment: .leading)
-                .padding(.horizontal, Theme.Space.xxl)
-                .padding(.top, Theme.Space.xxl)
-                .padding(.bottom, 96)
-                .frame(maxWidth: .infinity, alignment: .center)
+        ZStack(alignment: .topLeading) {
+            Color(nsColor: .textBackgroundColor)
+                .ignoresSafeArea()
+
+            if entry.text.isEmpty {
+                Text("What's on your mind?")
+                    .font(Font(bridge.fontFamily.font(size: Theme.FontSize.body)))
+                    .foregroundStyle(.tertiary)
+                    .padding(.horizontal, Theme.Space.xxl)
+                    .padding(.top, Theme.Space.xxl)
+                    .allowsHitTesting(false)
+            }
+
+            RichTextEditor(data: $entry.bodyData, plainText: $entry.text, bridge: bridge)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onChange(of: entry.text) { _, _ in
+                    entry.updatedAt = .now
+                }
         }
-        .background(Color(nsColor: .textBackgroundColor))
         .overlay(alignment: .bottom) {
             EditorToolbar(bridge: bridge)
                 .padding(.bottom, Theme.Space.l)
                 .padding(.horizontal, Theme.Space.l)
+                .zIndex(1000)
         }
         .navigationTitle(titleLine)
         .navigationSubtitle(metadataLine)
@@ -262,23 +273,7 @@ private struct EntryEditor: View {
         entry.createdAt.formatted(.dateTime.weekday(.wide).month(.wide).day().year())
     }
 
-    private var editorBody: some View {
-        ZStack(alignment: .topLeading) {
-            if entry.text.isEmpty {
-                Text("What's on your mind?")
-                    .font(Font(bridge.fontFamily.font(size: Theme.FontSize.body)))
-                    .foregroundStyle(.tertiary)
-                    .allowsHitTesting(false)
-            }
-            RichTextEditor(data: $entry.bodyData, plainText: $entry.text, bridge: bridge)
-                .frame(minHeight: 480)
-                .onChange(of: entry.text) { _, _ in
-                    entry.updatedAt = .now
-                }
-        }
-    }
-
-    private var metadataLine: String {
+private var metadataLine: String {
         let words = entry.text
             .split { $0.isWhitespace || $0.isNewline }
             .count

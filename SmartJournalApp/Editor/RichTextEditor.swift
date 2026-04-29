@@ -63,7 +63,17 @@ struct RichTextEditor: NSViewRepresentable {
         textView.textColor = .labelColor
         textView.backgroundColor = .clear
         textView.drawsBackground = false
-        textView.textContainerInset = .zero
+        textView.textContainerInset = NSSize(
+            width: Theme.Space.xxl,
+            height: Theme.Space.xxl
+        )
+        scrollView.automaticallyAdjustsContentInsets = false
+        scrollView.contentInsets = NSEdgeInsets(
+            top: 0, left: 0, bottom: 96, right: 0
+        )
+        scrollView.scrollerInsets = NSEdgeInsets(
+            top: 0, left: 0, bottom: 96, right: 0
+        )
         textView.minSize = NSSize(width: 0, height: 0)
         textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
                                   height: CGFloat.greatestFiniteMagnitude)
@@ -146,12 +156,15 @@ struct RichTextEditor: NSViewRepresentable {
                 return false
             }
 
-            let prefixLen = (detected.prefix as NSString).length
+            let prefixLen = detected.prefixLength
             let lineNS = line as NSString
             guard lineNS.length >= prefixLen else { return false }
             let after = lineNS.substring(from: prefixLen)
 
-            // Empty list item → exit the list by stripping its prefix.
+            let baseAttrs = tv.typingAttributes
+
+            // Empty list item → exit the list by stripping its prefix and
+            // any list-specific paragraph style.
             if after.trimmingCharacters(in: .whitespaces).isEmpty {
                 let toDelete = NSRange(location: paraRange.location,
                                        length: prefixLen)
@@ -159,28 +172,67 @@ struct RichTextEditor: NSViewRepresentable {
                                           replacementString: "") else {
                     return true
                 }
+                storage.beginEditing()
                 storage.replaceCharacters(in: toDelete, with: "")
+                let newPara = (storage.string as NSString)
+                    .paragraphRange(for: NSRange(location: paraRange.location,
+                                                 length: 0))
+                if newPara.length > 0 {
+                    storage.addAttribute(
+                        .paragraphStyle,
+                        value: NSParagraphStyle.default,
+                        range: newPara
+                    )
+                }
+                storage.endEditing()
                 tv.didChangeText()
+
+                var typing = baseAttrs
+                typing[.paragraphStyle] = NSParagraphStyle.default
+                tv.typingAttributes = typing
+
                 tv.setSelectedRange(NSRange(location: paraRange.location,
                                             length: 0))
                 return true
             }
 
             // Continue the list with the next prefix.
-            let insertion = "\n" + detected.continuation
-            let insRange = NSRange(location: selLoc, length: 0)
-            guard tv.shouldChangeText(in: insRange,
-                                      replacementString: insertion) else {
-                return true
-            }
-            let attrs = tv.typingAttributes
-            storage.replaceCharacters(
-                in: insRange,
-                with: NSAttributedString(string: insertion, attributes: attrs)
+            let continuation = NSMutableAttributedString(
+                string: "\n",
+                attributes: baseAttrs
             )
+            switch detected {
+            case .bullet:
+                continuation.append(
+                    RichTextCommand.bulletPrefix(baseAttrs: baseAttrs)
+                )
+            case .numbered(let n, _):
+                continuation.append(
+                    RichTextCommand.numberedPrefix(
+                        value: n + 1,
+                        baseAttrs: baseAttrs
+                    )
+                )
+            case .todo:
+                continuation.append(
+                    RichTextCommand.todoPrefix(baseAttrs: baseAttrs)
+                )
+            }
+
+            let insRange = NSRange(location: selLoc, length: 0)
+            guard tv.shouldChangeText(
+                in: insRange,
+                replacementString: continuation.string
+            ) else { return true }
+            storage.replaceCharacters(in: insRange, with: continuation)
             tv.didChangeText()
-            let newLoc = selLoc + (insertion as NSString).length
+
+            let newLoc = selLoc + continuation.length
             tv.setSelectedRange(NSRange(location: newLoc, length: 0))
+
+            // Keep typing-attribute font at base (the bullet glyph uses a
+            // larger size that we don't want bleeding into typed text).
+            tv.typingAttributes = baseAttrs
             return true
         }
 
