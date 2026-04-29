@@ -117,24 +117,12 @@ enum RichTextCommand {
         baseFont.pointSize * 1.6
     }
 
-    /// Marker (bullet / checkbox) rendered at 1.3× the base font size,
-    /// followed by a tab.
-    private static func scaledMarkerPrefix(
+    private static func markerPrefix(
         marker: String,
         baseAttrs: [NSAttributedString.Key: Any]
     ) -> NSAttributedString {
-        let baseFont = (baseAttrs[.font] as? NSFont)
-            ?? NSFont.systemFont(ofSize: Theme.FontSize.body)
-        let markerFont = NSFont(
-            descriptor: baseFont.fontDescriptor,
-            size: baseFont.pointSize * 1.3
-        ) ?? baseFont
-
-        var markerAttrs = baseAttrs
-        markerAttrs[.font] = markerFont
-
         let result = NSMutableAttributedString()
-        result.append(NSAttributedString(string: marker, attributes: markerAttrs))
+        result.append(NSAttributedString(string: marker, attributes: baseAttrs))
         result.append(NSAttributedString(string: "\t", attributes: baseAttrs))
         return result
     }
@@ -142,13 +130,13 @@ enum RichTextCommand {
     static func bulletPrefix(
         baseAttrs: [NSAttributedString.Key: Any]
     ) -> NSAttributedString {
-        scaledMarkerPrefix(marker: "•", baseAttrs: baseAttrs)
+        markerPrefix(marker: "●", baseAttrs: baseAttrs)
     }
 
     static func todoPrefix(
         baseAttrs: [NSAttributedString.Key: Any]
     ) -> NSAttributedString {
-        scaledMarkerPrefix(marker: "☐", baseAttrs: baseAttrs)
+        markerPrefix(marker: "☐", baseAttrs: baseAttrs)
     }
 
     static func numberedPrefix(
@@ -172,7 +160,7 @@ enum RichTextCommand {
 
     private enum ListKind {
         case bullet, numbered, todo
-        static let bulletRegex  = try! NSRegularExpression(pattern: #"^•[ \t]+"#)
+        static let bulletRegex  = try! NSRegularExpression(pattern: #"^●[ \t]+"#)
         static let numberRegex  = try! NSRegularExpression(pattern: #"^\d+\.[ \t]+"#)
         static let todoRegex    = try! NSRegularExpression(pattern: #"^[☐☑][ \t]+"#)
 
