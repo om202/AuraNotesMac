@@ -120,6 +120,70 @@ struct RichTextEditor: NSViewRepresentable {
         var parent: RichTextEditor
         init(_ parent: RichTextEditor) { self.parent = parent }
 
+        func textView(_ textView: NSTextView,
+                      doCommandBy selector: Selector) -> Bool {
+            if selector == #selector(NSResponder.insertNewline(_:)) {
+                return handleListContinuation(in: textView)
+            }
+            return false
+        }
+
+        private func handleListContinuation(in tv: NSTextView) -> Bool {
+            guard tv.selectedRange.length == 0,
+                  let storage = tv.textStorage else { return false }
+
+            let nsString = storage.string as NSString
+            let selLoc = tv.selectedRange.location
+            let paraRange = nsString.paragraphRange(
+                for: NSRange(location: selLoc, length: 0)
+            )
+            let paraText = nsString.substring(with: paraRange)
+            let line = paraText.hasSuffix("\n")
+                ? String(paraText.dropLast())
+                : paraText
+
+            guard let detected = RichTextCommand.detectList(in: line) else {
+                return false
+            }
+
+            let prefixLen = (detected.prefix as NSString).length
+            let lineNS = line as NSString
+            guard lineNS.length >= prefixLen else { return false }
+            let after = lineNS.substring(from: prefixLen)
+
+            // Empty list item → exit the list by stripping its prefix.
+            if after.trimmingCharacters(in: .whitespaces).isEmpty {
+                let toDelete = NSRange(location: paraRange.location,
+                                       length: prefixLen)
+                guard tv.shouldChangeText(in: toDelete,
+                                          replacementString: "") else {
+                    return true
+                }
+                storage.replaceCharacters(in: toDelete, with: "")
+                tv.didChangeText()
+                tv.setSelectedRange(NSRange(location: paraRange.location,
+                                            length: 0))
+                return true
+            }
+
+            // Continue the list with the next prefix.
+            let insertion = "\n" + detected.continuation
+            let insRange = NSRange(location: selLoc, length: 0)
+            guard tv.shouldChangeText(in: insRange,
+                                      replacementString: insertion) else {
+                return true
+            }
+            let attrs = tv.typingAttributes
+            storage.replaceCharacters(
+                in: insRange,
+                with: NSAttributedString(string: insertion, attributes: attrs)
+            )
+            tv.didChangeText()
+            let newLoc = selLoc + (insertion as NSString).length
+            tv.setSelectedRange(NSRange(location: newLoc, length: 0))
+            return true
+        }
+
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             let attr = tv.attributedString()

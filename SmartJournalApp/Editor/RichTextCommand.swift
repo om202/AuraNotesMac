@@ -69,6 +69,51 @@ enum RichTextCommand {
         applyLinePrefix(tv, kind: .todo)
     }
 
+    // MARK: List continuation
+
+    enum DetectedList {
+        case bullet
+        case numbered(Int)
+        case todo
+
+        /// The prefix as it appears on the current line (used for length math).
+        /// For todo, both `☐ ` and `☑ ` have the same UTF-16 length, so the
+        /// canonical form is fine.
+        var prefix: String {
+            switch self {
+            case .bullet:           return "• "
+            case .numbered(let n):  return "\(n). "
+            case .todo:             return "☐ "
+            }
+        }
+
+        /// The prefix to insert when continuing the list on a new line.
+        var continuation: String {
+            switch self {
+            case .bullet:           return "• "
+            case .numbered(let n):  return "\(n + 1). "
+            case .todo:             return "☐ "
+            }
+        }
+    }
+
+    /// Detects a list prefix at the start of `line`. Returns `nil` for
+    /// non-list paragraphs.
+    static func detectList(in line: String) -> DetectedList? {
+        if line.hasPrefix("• ") { return .bullet }
+        if line.hasPrefix("☐ ") || line.hasPrefix("☑ ") { return .todo }
+        let range = NSRange(line.startIndex..., in: line)
+        if let m = ListKind.numberRegex.firstMatch(in: line, range: range),
+           m.range.location == 0 {
+            let prefix = (line as NSString).substring(with: m.range)
+            if let dot = prefix.firstIndex(of: "."),
+               let n = Int(prefix[..<dot]) {
+                return .numbered(n)
+            }
+        }
+        return nil
+    }
+
     private enum ListKind {
         case bullet, numbered, todo
         static let bulletRegex  = try! NSRegularExpression(pattern: #"^•\s"#)
