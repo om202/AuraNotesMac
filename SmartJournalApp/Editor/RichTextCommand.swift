@@ -330,6 +330,11 @@ enum RichTextCommand {
 
         storage.replaceCharacters(in: paraRange, with: result)
         tv.didChangeText()
+
+        var typing = tv.typingAttributes
+        typing[.foregroundColor] = NSColor.labelColor
+        typing[.paragraphStyle] = allQuoted ? NSParagraphStyle.default : quoteStyle
+        tv.typingAttributes = typing
     }
 
     // MARK: Table
