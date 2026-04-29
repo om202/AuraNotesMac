@@ -1,0 +1,81 @@
+# macOS
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+Icon?
+.Spotlight-V100
+.Trashes
+
+# Xcode — user-specific
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+*.moved-aside
+*.perspectivev3
+*.mode1v3
+*.mode2v3
+*.pbxuser
+!default.pbxuser
+*.xccheckout
+*.xcscmblueprint
+
+# Xcode — build output
+build/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+# Keep Package.resolved for apps (deterministic builds); ignore for libraries.
+# Package.resolved
+
+# CocoaPods (defensive — not used today)
+Pods/
+
+# Carthage (defensive — not used today)
+Carthage/Build/
+
+# fastlane (defensive — not used today)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*~
+
+# Secrets / local config
+.env
+.env.*
+*.local
+secrets.plist
+
+# Claude Code — local-only (per-machine) state
+.claude/settings.local.json
+
+# Local LLM / model artifacts (kept out of git — large binaries)
+*.mlmodel
+*.mlpackage
+*.gguf
+adapters/
+models/
+
+# App runtime data that should never enter the repo
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.store
+*.store-shm
+*.store-wal
