@@ -248,6 +248,18 @@ private struct EntryEditor: View {
         }
         .navigationTitle(titleLine)
         .navigationSubtitle(metadataLine)
+        .alert(
+            "Dictation Unavailable",
+            isPresented: Binding(
+                get: { bridge.dictation.lastError != nil },
+                set: { if !$0 { bridge.dictation.lastError = nil } }
+            ),
+            presenting: bridge.dictation.lastError
+        ) { _ in
+            Button("OK", role: .cancel) { bridge.dictation.lastError = nil }
+        } message: { message in
+            Text(message)
+        }
         .toolbar {
             ToolbarItemGroup {
                 Button {
@@ -305,6 +317,19 @@ private struct EntryEditor: View {
                     Label("Reading Width", systemImage: "arrow.left.and.right")
                 }
                 .help("Reading width")
+
+                Button {
+                    bridge.dictation.toggle()
+                } label: {
+                    Label(
+                        bridge.dictation.isRecording ? "Stop Dictation" : "Start Dictation",
+                        systemImage: bridge.dictation.isRecording ? "mic.fill" : "mic"
+                    )
+                    .foregroundStyle(bridge.dictation.isRecording ? Color.red : Color.primary)
+                }
+                .help(bridge.dictation.isRecording
+                      ? "Stop dictating"
+                      : "Dictate (on-device)")
 
                 Button {
                     bridge.toggleAssists()

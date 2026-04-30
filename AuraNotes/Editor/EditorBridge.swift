@@ -35,6 +35,12 @@ final class EditorBridge {
         return UserDefaults.standard.bool(forKey: EditorBridge.assistsKey)
     }()
 
+    let dictation = DictationController()
+
+    init() {
+        dictation.bridge = self
+    }
+
     func setFontFamily(_ family: EditorFontFamily) {
         guard family != fontFamily else { return }
         fontFamily = family
