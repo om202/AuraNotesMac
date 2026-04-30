@@ -73,6 +73,15 @@ struct RichTextEditor: NSViewRepresentable {
             width: Theme.Space.xxl,
             height: Theme.Space.xxl
         )
+
+        // Apple Intelligence: enable system Writing Tools on this text view.
+        // The system will inject Writing Tools entries into the context menu
+        // and (on macOS 15+) drive inline rewrites when invoked.
+        if #available(macOS 15.0, *) {
+            textView.writingToolsBehavior = .complete
+            textView.allowedWritingToolsResultOptions = [.plainText, .richText, .list, .table]
+        }
+        textView.installAIButton()
         scrollView.automaticallyAdjustsContentInsets = false
         scrollView.contentInsets = NSEdgeInsets(
             top: 0, left: 0, bottom: 96, right: 0
@@ -161,7 +170,22 @@ struct RichTextEditor: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: RichTextEditor
+        private var writingToolsActive = false
         init(_ parent: RichTextEditor) { self.parent = parent }
+
+        // Apple Intelligence Writing Tools — pause RTF re-serialization while
+        // a session is active so streaming rewrites don't thrash the binding.
+        // The final text gets persisted on session end.
+        @available(macOS 15.0, *)
+        func textViewWritingToolsWillBegin(_ textView: NSTextView) {
+            writingToolsActive = true
+        }
+
+        @available(macOS 15.0, *)
+        func textViewWritingToolsDidEnd(_ textView: NSTextView) {
+            writingToolsActive = false
+            persist(textView)
+        }
 
         func textView(_ textView: NSTextView,
                       doCommandBy selector: Selector) -> Bool {
@@ -271,6 +295,11 @@ struct RichTextEditor: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
+            if writingToolsActive { return }
+            persist(tv)
+        }
+
+        private func persist(_ tv: NSTextView) {
             let attr = tv.attributedString()
             let fullRange = NSRange(location: 0, length: attr.length)
             let rtf = (try? attr.data(

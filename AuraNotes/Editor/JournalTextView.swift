@@ -4,6 +4,7 @@
 //
 
 import AppKit
+import SwiftUI
 
 enum EditorSpread: String, CaseIterable, Identifiable {
     case narrow, medium, wide, full
@@ -47,6 +48,114 @@ final class JournalTextView: NSTextView {
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         updateHorizontalInsetsForSpread()
+        repositionAIButton()
+    }
+
+    // MARK: - Inline AI button
+
+    private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+    }
+
+    private lazy var aiButtonHost: FirstMouseHostingView<AIInlineButton> = {
+        let host = FirstMouseHostingView(rootView: AIInlineButton { [weak self] in
+            self?.invokeWritingTools()
+        })
+        host.isHidden = true
+        return host
+    }()
+
+    func installAIButton() {
+        if aiButtonHost.superview !== self {
+            addSubview(aiButtonHost)
+        }
+    }
+
+    override func setSelectedRanges(_ ranges: [NSValue],
+                                    affinity: NSSelectionAffinity,
+                                    stillSelecting: Bool) {
+        super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: stillSelecting)
+        repositionAIButton()
+    }
+
+    private func repositionAIButton() {
+        let sel = selectedRange()
+        guard sel.length > 0,
+              let lm = layoutManager,
+              let tc = textContainer else {
+            aiButtonHost.isHidden = true
+            return
+        }
+        let glyphRange = lm.glyphRange(forCharacterRange: sel,
+                                       actualCharacterRange: nil)
+        guard glyphRange.length > 0 else {
+            aiButtonHost.isHidden = true
+            return
+        }
+        let rect = lm.boundingRect(forGlyphRange: glyphRange, in: tc)
+        let inset = textContainerOrigin
+        let size = aiButtonHost.fittingSize.width > 0
+            ? aiButtonHost.fittingSize
+            : NSSize(width: 64, height: 28)
+
+        // Anchor to the top-right of the selection rect, lifted just above it.
+        var x = rect.maxX + inset.x - size.width
+        var y = rect.minY + inset.y - size.height - 4
+
+        // Keep inside the visible text area.
+        x = max(inset.x, min(x, bounds.width - size.width - 4))
+        if y < 4 {
+            y = rect.maxY + inset.y + 4 // flip below if there's no room above
+        }
+
+        aiButtonHost.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
+        aiButtonHost.isHidden = false
+    }
+
+    private func invokeWritingTools() {
+        window?.makeFirstResponder(self)
+
+        // First try the responder action — works on macOS 15+ when the system
+        // exposes Writing Tools as an action on NSTextView.
+        let sel = NSSelectorFromString("showWritingTools:")
+        if NSApp.sendAction(sel, to: nil, from: self) { return }
+
+        // Fallback: pop up the text view's own contextual menu at the
+        // selection. On macOS 15+ this menu includes the Writing Tools
+        // submenu (and on older OS it's at least the standard edit menu).
+        popUpSelectionContextMenu()
+    }
+
+    private func popUpSelectionContextMenu() {
+        guard let lm = layoutManager,
+              let tc = textContainer,
+              let win = window else { return }
+
+        let r = selectedRange()
+        guard r.length > 0 else { return }
+
+        let glyphRange = lm.glyphRange(forCharacterRange: r,
+                                       actualCharacterRange: nil)
+        let rect = lm.boundingRect(forGlyphRange: glyphRange, in: tc)
+        let inset = textContainerOrigin
+        let pointInView = NSPoint(x: rect.midX + inset.x,
+                                  y: rect.maxY + inset.y)
+        let pointInWindow = convert(pointInView, to: nil)
+
+        let synthetic = NSEvent.mouseEvent(
+            with: .rightMouseDown,
+            location: pointInWindow,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: win.windowNumber,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 1,
+            pressure: 1
+        )
+        guard let event = synthetic,
+              let menu = self.menu(for: event) else { return }
+        NSMenu.popUpContextMenu(menu, with: event, for: self)
     }
 
     private func updateHorizontalInsetsForSpread() {
