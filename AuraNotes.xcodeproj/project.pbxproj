@@ -261,6 +261,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Aura Notes";
+				INFOPLIST_KEY_CFBundleName = "Aura Notes";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Aura Notes uses the microphone to dictate your journal entries on-device.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Aura Notes transcribes your speech on-device so you can dictate journal entries.";
@@ -297,6 +298,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Aura Notes";
+				INFOPLIST_KEY_CFBundleName = "Aura Notes";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Aura Notes uses the microphone to dictate your journal entries on-device.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Aura Notes transcribes your speech on-device so you can dictate journal entries.";
