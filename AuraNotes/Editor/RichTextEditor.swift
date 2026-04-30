@@ -5,11 +5,13 @@
 
 import SwiftUI
 import AppKit
+import StoreKit
 
 struct RichTextEditor: NSViewRepresentable {
     @Binding var data: Data?
     @Binding var plainText: String
     var bridge: EditorBridge?
+    @Environment(\.requestReview) private var requestReview
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -194,6 +196,9 @@ struct RichTextEditor: NSViewRepresentable {
         func textViewWritingToolsDidEnd(_ textView: NSTextView) {
             writingToolsActive = false
             persist(textView)
+            ReviewPromptCoordinator.shared.recordWritingToolsAccepted(
+                using: parent.requestReview
+            )
         }
 
         func textView(_ textView: NSTextView,

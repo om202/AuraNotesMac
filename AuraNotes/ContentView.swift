@@ -5,6 +5,7 @@
 
 import SwiftUI
 import SwiftData
+import StoreKit
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -14,6 +15,9 @@ struct ContentView: View {
     @State private var selectedEntry: Entry?
     @State private var pendingDeletion: Entry?
     @State private var didRestoreSelection = false
+    @State private var selectionOpenedAt: Date?
+    @State private var selectionOpenedTextCount: Int = 0
+    @Environment(\.requestReview) private var requestReview
     @AppStorage("themeOverride") private var themeOverrideRaw: String = ""
     @AppStorage("lastOpenedEntryAt") private var lastOpenedEntryAt: Double = 0
 
@@ -32,11 +36,20 @@ struct ContentView: View {
             detail
         }
         .preferredColorScheme(themeOverride)
-        .onAppear { restoreSelectionIfNeeded() }
+        .onAppear {
+            restoreSelectionIfNeeded()
+            ReviewPromptCoordinator.shared.recordSessionStart(using: requestReview)
+        }
         .onChange(of: entries.count) { _, _ in restoreSelectionIfNeeded() }
-        .onChange(of: selectedEntry) { _, newValue in
+        .onChange(of: selectedEntry) { oldValue, newValue in
+            evaluateMeaningfulEdit(closing: oldValue)
             if let entry = newValue {
                 lastOpenedEntryAt = entry.createdAt.timeIntervalSinceReferenceDate
+                selectionOpenedAt = .now
+                selectionOpenedTextCount = entry.text.count
+            } else {
+                selectionOpenedAt = nil
+                selectionOpenedTextCount = 0
             }
         }
         .confirmationDialog(
@@ -167,6 +180,21 @@ struct ContentView: View {
         let entry = Entry()
         modelContext.insert(entry)
         selectedEntry = entry
+        ReviewPromptCoordinator.shared.recordEntryCreated(using: requestReview)
+    }
+
+    /// Counts an entry session as "meaningful" if the user kept it open
+    /// for ≥ 90s and it grew past 200 chars. Used as a positive signal
+    /// for the rating prompt — and as the trigger moment when the user
+    /// switches away from a note they invested real time in.
+    private func evaluateMeaningfulEdit(closing entry: Entry?) {
+        guard let entry,
+              let openedAt = selectionOpenedAt else { return }
+        let elapsed = Date.now.timeIntervalSince(openedAt)
+        let grew = entry.text.count - selectionOpenedTextCount
+        guard elapsed >= 90, entry.text.count > 200, grew > 0 else { return }
+
+        ReviewPromptCoordinator.shared.recordMeaningfulEdit(using: requestReview)
     }
 
     private func delete(_ entry: Entry) {
