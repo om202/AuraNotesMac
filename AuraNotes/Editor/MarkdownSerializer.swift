@@ -17,27 +17,15 @@ enum MarkdownSerializer {
         var i = 0
 
         while i < nsString.length {
-            let pr = nsString.paragraphRange(for: NSRange(location: i, length: 0))
-            let para = attr.attributedSubstring(from: pr)
-
-            // Horizontal rule: a 1×1 table-block paragraph with only a top
-            // border. Has to be checked before the regular table consumer,
-            // which would otherwise eat the rule as an empty 1-cell table.
-            if HorizontalRule.isHorizontalRule(para) {
-                out.append("---")
-                if para.string.hasSuffix("\n") { out.append("\n") }
-                i = pr.location + pr.length
-                if pr.length == 0 { break }
-                continue
-            }
-
-            // Multi-cell table block? Consume the whole table at once.
+            // Table block? Consume the whole table at once.
             if let (md, end) = consumeTable(in: attr, startingAtParagraph: i) {
                 out.append(md)
                 i = end
                 continue
             }
 
+            let pr = nsString.paragraphRange(for: NSRange(location: i, length: 0))
+            let para = attr.attributedSubstring(from: pr)
             out.append(serializeParagraph(para))
             i = pr.location + pr.length
             if pr.length == 0 { break }
@@ -264,15 +252,6 @@ enum MarkdownSerializer {
     private static func escapeBlockStart(_ s: String, hasPrefix: Bool) -> String {
         guard !hasPrefix, let first = s.first else { return s }
         if first == "#" || first == ">" {
-            return "\\" + s
-        }
-        // Thematic break: `---` / `***` / `___` (≥3 of one char on its own).
-        // Escape so a paragraph containing only those characters round-trips
-        // as plain text instead of being parsed as a horizontal rule.
-        let trimmed = s.trimmingCharacters(in: .whitespaces)
-        if trimmed.count >= 3,
-           let head = trimmed.first, "-_*".contains(head),
-           trimmed.allSatisfy({ $0 == head }) {
             return "\\" + s
         }
         // "- ", "* ", "+ "

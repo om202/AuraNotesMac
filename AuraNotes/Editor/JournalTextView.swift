@@ -232,51 +232,6 @@ final class JournalTextView: NSTextView {
         }
     }
 
-    override func insertNewline(_ sender: Any?) {
-        if applyHorizontalRuleOnReturn() { return }
-        super.insertNewline(sender)
-    }
-
-    /// `---`, `***`, or `___` on its own line + Return → horizontal rule.
-    private func applyHorizontalRuleOnReturn() -> Bool {
-        guard selectedRange().length == 0,
-              let storage = textStorage else { return false }
-        let cursor = selectedRange().location
-
-        // Don't trigger inside an inline code run.
-        if cursor > 0,
-           let font = storage.attribute(.font, at: cursor - 1, effectiveRange: nil) as? NSFont,
-           font.isFixedPitch {
-            return false
-        }
-
-        let nsString = storage.string as NSString
-        let paraRange = nsString.paragraphRange(for: NSRange(location: cursor, length: 0))
-        let lineEnd = paraRange.location + paraRange.length
-        let contentEnd = (lineEnd > paraRange.location
-                          && nsString.character(at: lineEnd - 1) == 0x0A) ? lineEnd - 1 : lineEnd
-        guard cursor == contentEnd else { return false }
-
-        let line = nsString.substring(with: NSRange(
-            location: paraRange.location,
-            length: contentEnd - paraRange.location
-        ))
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        let isBreak = trimmed.count >= 3
-            && (trimmed.allSatisfy { $0 == "-" }
-                || trimmed.allSatisfy { $0 == "*" }
-                || trimmed.allSatisfy { $0 == "_" })
-        guard isBreak else { return false }
-
-        let deleteRange = NSRange(location: paraRange.location,
-                                  length: contentEnd - paraRange.location)
-        guard shouldChangeText(in: deleteRange, replacementString: "") else { return false }
-        storage.replaceCharacters(in: deleteRange, with: "")
-        didChangeText()
-        RichTextCommand.insertHorizontalRule(self)
-        return true
-    }
-
     // MARK: Inline auto-format
 
     private func applyInlineAutoFormat(after typed: Character) {

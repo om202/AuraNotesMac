@@ -159,7 +159,6 @@ struct RichTextEditor: NSViewRepresentable {
             let normalized = NSMutableAttributedString(attributedString: attr)
             EditorFont.applyFamily(family, to: normalized)
             rehydrateAppearanceAwareColors(in: normalized)
-            HorizontalRule.rehydrateBorderColors(in: normalized)
             return normalized
         }
         let attrs: [NSAttributedString.Key: Any] = [

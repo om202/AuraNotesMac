@@ -137,12 +137,6 @@ struct EditorToolbar: View {
                 run { RichTextCommand.insertLink($0) }
             }
 
-            if level == .full || level == .wide || level == .medium {
-                iconButton("Horizontal Line", systemImage: "minus") {
-                    run { RichTextCommand.insertHorizontalRule($0) }
-                }
-            }
-
             if level != .full {
                 overflowMenu(level: level)
             }
@@ -247,7 +241,6 @@ struct EditorToolbar: View {
                     Button("4 × 4") { run { RichTextCommand.insertTable($0, rows: 4, columns: 4) } }
                     Button("5 × 3") { run { RichTextCommand.insertTable($0, rows: 5, columns: 3) } }
                 }
-                Button("Horizontal Line") { run { RichTextCommand.insertHorizontalRule($0) } }
             }
         } label: {
             Image(systemName: "ellipsis.circle")
