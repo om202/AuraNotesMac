@@ -5,6 +5,7 @@
 
 import SwiftUI
 import SwiftData
+import AppKit
 
 @main
 struct AuraNotesApp: App {
@@ -32,5 +33,16 @@ struct AuraNotesApp: App {
         }
         .modelContainer(sharedModelContainer)
         .windowResizability(.contentMinSize)
+        .commands {
+            CommandGroup(after: .pasteboard) {
+                Button("Paste and Match Style") {
+                    NSApp.sendAction(
+                        #selector(NSTextView.pasteAsPlainText(_:)),
+                        to: nil, from: nil
+                    )
+                }
+                .keyboardShortcut("v", modifiers: [.command, .shift, .option])
+            }
+        }
     }
 }
