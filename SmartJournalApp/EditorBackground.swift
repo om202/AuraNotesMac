@@ -53,17 +53,20 @@ enum EditorBackground: String, CaseIterable, Identifiable {
             if self == .default {
                 NSColor.windowBackgroundColor.setFill()
                 path.fill()
-                NSColor.separatorColor.setStroke()
-                path.lineWidth = 1
+                let stroke = isDark
+                    ? NSColor.white.withAlphaComponent(0.65)
+                    : NSColor.black.withAlphaComponent(0.55)
+                stroke.setStroke()
+                path.lineWidth = 1.25
                 path.stroke()
             } else {
                 self.swatch(for: appearance).setFill()
                 path.fill()
                 let stroke = isDark
-                    ? NSColor.white.withAlphaComponent(0.18)
-                    : NSColor.black.withAlphaComponent(0.18)
+                    ? NSColor.white.withAlphaComponent(0.55)
+                    : NSColor.black.withAlphaComponent(0.55)
                 stroke.setStroke()
-                path.lineWidth = 0.75
+                path.lineWidth = 1.25
                 path.stroke()
             }
             return true

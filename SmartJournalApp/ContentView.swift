@@ -172,22 +172,44 @@ private struct EntryRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(entry.previewTitle)
-                .font(.system(size: 13, weight: .bold))
-                .lineLimit(1)
-                .foregroundStyle(isSelected ? Color.white : .primary)
-                .padding(.vertical, Theme.Space.s)
-                .padding(.horizontal, Theme.Space.s)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: Theme.Radius.s, style: .continuous)
-                        .fill(isSelected ? Color.accentColor : Color.clear)
-                )
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.previewTitle)
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+                    .foregroundStyle(isSelected ? Color.white : .primary)
+
+                Text(dateLabel)
+                    .font(.system(size: 12))
+                    .foregroundStyle(isSelected ? Color.white.opacity(0.85) : .secondary)
+            }
+            .padding(.vertical, Theme.Space.s)
+            .padding(.horizontal, Theme.Space.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Radius.s, style: .continuous)
+                    .fill(isSelected ? Color.accentColor : Color.clear)
+            )
 
             if !isSelected {
                 Divider()
             }
         }
+    }
+
+    private var dateLabel: String {
+        let cal = Calendar.current
+        let date = entry.createdAt
+        let time = date.formatted(.dateTime.hour().minute())
+        if cal.isDateInToday(date) {
+            return time
+        }
+        if cal.isDateInYesterday(date) {
+            return "Yesterday · \(time)"
+        }
+        if let days = cal.dateComponents([.day], from: date, to: .now).day, days < 7 {
+            return "\(date.formatted(.dateTime.weekday(.wide))) · \(time)"
+        }
+        return "\(date.formatted(.dateTime.month(.abbreviated).day().year(.twoDigits))) · \(time)"
     }
 }
 
