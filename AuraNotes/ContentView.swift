@@ -311,10 +311,9 @@ private struct EntryEditor: View {
                 } label: {
                     Label(
                         bridge.assistsEnabled ? "Disable Writing Assists" : "Enable Writing Assists",
-                        systemImage: bridge.assistsEnabled
-                            ? "wand.and.stars"
-                            : "wand.and.stars.inverse"
+                        systemImage: "textformat.characters.dottedunderline"
                     )
+                    .foregroundStyle(bridge.assistsEnabled ? Color.orange : Color.primary)
                 }
                 .help(bridge.assistsEnabled
                       ? "Turn off autocorrect, spell check, and smart substitutions"
