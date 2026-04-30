@@ -61,7 +61,7 @@ struct RichTextEditor: NSViewRepresentable {
             .foregroundColor: Theme.EditorColor.body
         ]
         textView.textColor = Theme.EditorColor.body
-        textView.backgroundColor = Theme.EditorColor.background
+        textView.backgroundColor = bridge?.background.color ?? Theme.EditorColor.background
         textView.drawsBackground = true
         textView.insertionPointColor = Theme.EditorColor.body
         textView.textContainerInset = NSSize(

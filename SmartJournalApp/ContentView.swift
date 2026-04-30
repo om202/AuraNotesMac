@@ -233,7 +233,7 @@ private struct EntryEditor: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Color(nsColor: Theme.EditorColor.background)
+            Color(nsColor: bridge.background.color)
                 .ignoresSafeArea()
 
             if entry.text.isEmpty {
@@ -276,6 +276,29 @@ private struct EntryEditor: View {
                 }
                 .keyboardShortcut("+", modifiers: .command)
                 .help("Increase font size (⌘+)")
+
+                Menu {
+                    ForEach(EditorBackground.allCases) { option in
+                        Button {
+                            bridge.setBackground(option)
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(nsImage: option.swatchImage())
+                                Text(option.displayName)
+                                if option == bridge.background {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Label {
+                        Text("Background")
+                    } icon: {
+                        Image(nsImage: bridge.background.swatchImage(size: 14))
+                    }
+                }
+                .help("Page background")
 
                 Menu {
                     ForEach(EditorSpread.allCases) { option in
