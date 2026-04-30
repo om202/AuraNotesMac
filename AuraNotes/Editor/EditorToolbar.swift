@@ -158,11 +158,16 @@ struct EditorToolbar: View {
             Button("Body") { run { RichTextCommand.setHeadingLevel($0, level: 0) } }
                 .keyboardShortcut("0", modifiers: .command)
         } label: {
-            Label("Style", systemImage: "textformat.size")
-                .font(.system(size: labelFontSize, weight: .semibold))
+            Label {
+                Text("Style")
+                    .font(.system(size: labelFontSize, weight: .bold))
+            } icon: {
+                Text("AA")
+                    .font(.system(size: iconSize, weight: .bold))
+            }
         }
         .menuStyle(.borderlessButton)
-        .frame(width: 110)
+        .fixedSize()
         .help("Heading style (⌘1 / ⌘2 / ⌘3 / ⌘0)")
     }
 
@@ -180,11 +185,16 @@ struct EditorToolbar: View {
                 }
             }
         } label: {
-            Label(bridge.fontFamily.shortName, systemImage: "textformat")
-                .font(.system(size: labelFontSize, weight: .semibold))
+            Label {
+                Text(bridge.fontFamily.shortName)
+                    .font(.system(size: labelFontSize, weight: .bold))
+            } icon: {
+                Text("Aa")
+                    .font(.system(size: iconSize, weight: .bold))
+            }
         }
         .menuStyle(.borderlessButton)
-        .frame(width: 100)
+        .fixedSize()
         .help("Editor font (Sans / Serif)")
     }
 

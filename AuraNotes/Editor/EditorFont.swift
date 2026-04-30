@@ -21,8 +21,8 @@ enum EditorFontFamily: String, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .sans: return "Source Sans 3"
-        case .serif: return "Source Serif 4"
+        case .sans: return "Sans Serif"
+        case .serif: return "Serif"
         }
     }
 
