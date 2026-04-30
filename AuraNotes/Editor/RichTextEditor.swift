@@ -77,9 +77,15 @@ struct RichTextEditor: NSViewRepresentable {
         // Apple Intelligence: enable system Writing Tools on this text view.
         // The system will inject Writing Tools entries into the context menu
         // and (on macOS 15+) drive inline rewrites when invoked.
+        //
+        // We deliberately constrain the result options to .plainText so that
+        // replacements inherit our body typing attributes (font family, body
+        // size, body color) instead of the system's default rich-text styling.
+        // .richText / .list / .table results otherwise come back with smaller,
+        // greyer text than the surrounding body.
         if #available(macOS 15.0, *) {
             textView.writingToolsBehavior = .complete
-            textView.allowedWritingToolsResultOptions = [.plainText, .richText, .list, .table]
+            textView.allowedWritingToolsResultOptions = [.plainText]
         }
         // Inline predictions and the older text-completion pipeline are
         // toggled by EditorBridge.applyAssists alongside the rest of the
