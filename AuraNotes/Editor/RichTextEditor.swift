@@ -226,9 +226,70 @@ struct RichTextEditor: NSViewRepresentable {
         func textView(_ textView: NSTextView,
                       doCommandBy selector: Selector) -> Bool {
             if selector == #selector(NSResponder.insertNewline(_:)) {
-                return handleListContinuation(in: textView)
+                if handleListContinuation(in: textView) { return true }
+                if handleHeadingExit(in: textView) { return true }
             }
             return false
+        }
+
+        /// Return at the end of a heading paragraph drops the next line back
+        /// to body typography. Without this, the new paragraph inherits the
+        /// heading's typing attributes and the user keeps typing in title size.
+        private func handleHeadingExit(in tv: NSTextView) -> Bool {
+            guard tv.selectedRange.length == 0,
+                  let storage = tv.textStorage else { return false }
+            let typing = tv.typingAttributes
+            guard let font = typing[.font] as? NSFont else { return false }
+
+            // Anything noticeably larger than body is treated as a heading.
+            // Body is 18, subheading 21 — a ≥ 2pt margin distinguishes
+            // headings from scaled-up body without false positives.
+            guard font.pointSize >= CGFloat(Theme.FontSize.body) + 2 else {
+                return false
+            }
+
+            // Cursor must sit at the end of the line, not mid-heading.
+            let cursor = tv.selectedRange.location
+            let nsString = storage.string as NSString
+            let para = nsString.paragraphRange(for: NSRange(location: cursor, length: 0))
+            let lineEnd = para.location + para.length
+            let contentEnd = (lineEnd > para.location
+                              && nsString.character(at: lineEnd - 1) == 0x0A)
+                ? lineEnd - 1 : lineEnd
+            guard cursor == contentEnd else { return false }
+
+            // Empty heading line: strip the heading style in place and let
+            // the user keep typing on the same line as body.
+            let bodyFont = EditorFont.currentFamily.font(size: Theme.FontSize.body)
+            let bodyAttrs: [NSAttributedString.Key: Any] = [
+                .font: bodyFont,
+                .foregroundColor: Theme.EditorColor.body
+            ]
+
+            if cursor == para.location {
+                if para.length > 0 {
+                    storage.addAttributes(bodyAttrs, range: para)
+                    tv.didChangeText()
+                }
+                tv.typingAttributes = bodyAttrs
+                return true
+            }
+
+            // Non-empty heading line: insert a newline and start the next
+            // paragraph in body typography.
+            let newlineAttrs = bodyAttrs
+            let insRange = NSRange(location: cursor, length: 0)
+            guard tv.shouldChangeText(in: insRange, replacementString: "\n") else {
+                return true
+            }
+            storage.replaceCharacters(
+                in: insRange,
+                with: NSAttributedString(string: "\n", attributes: newlineAttrs)
+            )
+            tv.didChangeText()
+            tv.setSelectedRange(NSRange(location: cursor + 1, length: 0))
+            tv.typingAttributes = bodyAttrs
+            return true
         }
 
         private func handleListContinuation(in tv: NSTextView) -> Bool {
@@ -347,7 +408,21 @@ struct RichTextEditor: NSViewRepresentable {
                 tv.textStorage?.endEditing()
                 renumberInProgress = false
             }
+            resetTypingAttributesIfEmpty(tv)
             schedulePersist(for: tv)
+        }
+
+        /// When the document is fully empty, drop any lingering heading or
+        /// list typing attributes so the next character starts as body. Also
+        /// clears any stale paragraph style (hanging indent from a deleted
+        /// list, etc.).
+        private func resetTypingAttributesIfEmpty(_ tv: NSTextView) {
+            guard let storage = tv.textStorage, storage.length == 0 else { return }
+            let bodyFont = EditorFont.currentFamily.font(size: Theme.FontSize.body)
+            tv.typingAttributes = [
+                .font: bodyFont,
+                .foregroundColor: Theme.EditorColor.body
+            ]
         }
 
         /// Trailing-edge debounce: serializing a long document to RTF on every
