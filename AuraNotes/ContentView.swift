@@ -306,6 +306,20 @@ private struct EntryEditor: View {
                 }
                 .help("Reading width")
 
+                Button {
+                    bridge.toggleAssists()
+                } label: {
+                    Label(
+                        bridge.assistsEnabled ? "Disable Writing Assists" : "Enable Writing Assists",
+                        systemImage: bridge.assistsEnabled
+                            ? "wand.and.stars"
+                            : "wand.and.stars.inverse"
+                    )
+                }
+                .help(bridge.assistsEnabled
+                      ? "Turn off autocorrect, spell check, and smart substitutions"
+                      : "Turn on autocorrect, spell check, and smart substitutions")
+
                 Button(role: .destructive, action: onDelete) {
                     Label("Delete", systemImage: "trash")
                 }
