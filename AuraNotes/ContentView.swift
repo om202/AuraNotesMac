@@ -319,19 +319,6 @@ private struct EntryEditor: View {
                 .help("Reading width")
 
                 Button {
-                    bridge.dictation.toggle()
-                } label: {
-                    Label(
-                        bridge.dictation.isRecording ? "Stop Dictation" : "Start Dictation",
-                        systemImage: bridge.dictation.isRecording ? "mic.fill" : "mic"
-                    )
-                    .foregroundStyle(bridge.dictation.isRecording ? Color.red : Color.primary)
-                }
-                .help(bridge.dictation.isRecording
-                      ? "Stop dictating"
-                      : "Dictate (on-device)")
-
-                Button {
                     bridge.toggleAssists()
                 } label: {
                     Label(
@@ -348,6 +335,23 @@ private struct EntryEditor: View {
                     Label("Delete", systemImage: "trash")
                 }
                 .help("Delete entry")
+
+                Button {
+                    bridge.dictation.toggle()
+                } label: {
+                    Image(systemName: bridge.dictation.isRecording ? "mic.fill" : "mic")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 32, height: 32)
+                        .background(
+                            Circle()
+                                .fill(Color(red: 255/255, green: 117/255, blue: 31/255))
+                        )
+                }
+                .buttonStyle(.plain)
+                .help(bridge.dictation.isRecording
+                      ? "Stop dictating"
+                      : "Dictate (on-device)")
             }
         }
     }
