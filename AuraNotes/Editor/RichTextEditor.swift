@@ -93,6 +93,12 @@ struct RichTextEditor: NSViewRepresentable {
 
         scrollView.documentView = textView
         bridge?.textView = textView
+
+        DispatchQueue.main.async { [weak textView] in
+            guard let textView, let window = textView.window else { return }
+            window.makeFirstResponder(textView)
+        }
+
         return scrollView
     }
 
