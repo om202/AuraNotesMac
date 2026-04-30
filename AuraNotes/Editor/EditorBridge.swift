@@ -87,5 +87,15 @@ final class EditorBridge {
         tv.isAutomaticLinkDetectionEnabled = on
         tv.smartInsertDeleteEnabled = on
         tv.isAutomaticDataDetectionEnabled = on
+        tv.isAutomaticTextCompletionEnabled = on
+        // .default lets the system decide when ghost-text predictions are
+        // useful (it suppresses them inside lists, short fragments, code-like
+        // runs, etc.). Forcing .yes overrides that judgment without
+        // benefit — Apple explicitly recommends .default. Final activation
+        // also depends on the user's macOS-wide "Show inline predictive
+        // text" toggle in System Settings → Keyboard.
+        if #available(macOS 14.0, *) {
+            tv.inlinePredictionType = on ? .default : .no
+        }
     }
 }

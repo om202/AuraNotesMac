@@ -81,6 +81,9 @@ struct RichTextEditor: NSViewRepresentable {
             textView.writingToolsBehavior = .complete
             textView.allowedWritingToolsResultOptions = [.plainText, .richText, .list, .table]
         }
+        // Inline predictions and the older text-completion pipeline are
+        // toggled by EditorBridge.applyAssists alongside the rest of the
+        // Writing Assists settings — no need to set them here.
         textView.installAIButton()
         scrollView.automaticallyAdjustsContentInsets = false
         scrollView.contentInsets = NSEdgeInsets(
