@@ -72,25 +72,49 @@ struct EditorToolbar: View {
             iconButton("Underline (⌘U)", systemImage: "underline") {
                 run { RichTextCommand.toggleUnderline($0) }
             }
-            iconButton("Strikethrough", systemImage: "strikethrough") {
+            iconButton(
+                "Strikethrough (⌘⇧X)",
+                systemImage: "strikethrough",
+                shortcut: "x", modifiers: [.command, .shift]
+            ) {
                 run { RichTextCommand.toggleStrikethrough($0) }
             }
-            iconButton("Code", systemImage: "curlybraces") {
+            iconButton(
+                "Code (⌘E)",
+                systemImage: "curlybraces",
+                shortcut: "e", modifiers: .command
+            ) {
                 run { RichTextCommand.toggleCode($0) }
             }
 
             divider
 
-            iconButton("Bulleted List", systemImage: "list.bullet") {
+            iconButton(
+                "Bulleted List (⌘⇧8)",
+                systemImage: "list.bullet",
+                shortcut: "8", modifiers: [.command, .shift]
+            ) {
                 run { RichTextCommand.toggleBulletList($0) }
             }
-            iconButton("Numbered List", systemImage: "list.number") {
+            iconButton(
+                "Numbered List (⌘⇧7)",
+                systemImage: "list.number",
+                shortcut: "7", modifiers: [.command, .shift]
+            ) {
                 run { RichTextCommand.toggleNumberedList($0) }
             }
-            iconButton("Todo List", systemImage: "checklist") {
+            iconButton(
+                "Todo List (⌘⇧L)",
+                systemImage: "checklist",
+                shortcut: "l", modifiers: [.command, .shift]
+            ) {
                 run { RichTextCommand.toggleTodoList($0) }
             }
-            iconButton("Quote", systemImage: "text.quote") {
+            iconButton(
+                "Quote (⌘⇧.)",
+                systemImage: "text.quote",
+                shortcut: ".", modifiers: [.command, .shift]
+            ) {
                 run { RichTextCommand.toggleQuote($0) }
             }
 
@@ -130,8 +154,15 @@ struct EditorToolbar: View {
             .padding(.horizontal, Theme.Space.s)
     }
 
-    private func iconButton(_ help: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    @ViewBuilder
+    private func iconButton(
+        _ help: String,
+        systemImage: String,
+        shortcut: KeyEquivalent? = nil,
+        modifiers: EventModifiers = [],
+        action: @escaping () -> Void
+    ) -> some View {
+        let button = Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: iconSize, weight: .regular))
                 .frame(width: buttonSize, height: buttonSize)
@@ -139,6 +170,12 @@ struct EditorToolbar: View {
         }
         .buttonStyle(.borderless)
         .help(help)
+
+        if let shortcut {
+            button.keyboardShortcut(shortcut, modifiers: modifiers)
+        } else {
+            button
+        }
     }
 
     private func run(_ action: (NSTextView) -> Void) {
