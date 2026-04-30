@@ -13,7 +13,9 @@ struct ContentView: View {
 
     @State private var selectedEntry: Entry?
     @State private var pendingDeletion: Entry?
+    @State private var didRestoreSelection = false
     @AppStorage("themeOverride") private var themeOverrideRaw: String = ""
+    @AppStorage("lastOpenedEntryAt") private var lastOpenedEntryAt: Double = 0
 
     private var themeOverride: ColorScheme? {
         switch themeOverrideRaw {
@@ -30,6 +32,13 @@ struct ContentView: View {
             detail
         }
         .preferredColorScheme(themeOverride)
+        .onAppear { restoreSelectionIfNeeded() }
+        .onChange(of: entries.count) { _, _ in restoreSelectionIfNeeded() }
+        .onChange(of: selectedEntry) { _, newValue in
+            if let entry = newValue {
+                lastOpenedEntryAt = entry.createdAt.timeIntervalSinceReferenceDate
+            }
+        }
         .confirmationDialog(
             "Delete this entry?",
             isPresented: deletionBinding,
@@ -125,6 +134,33 @@ struct ContentView: View {
 
     private func toggleThemeOverride() {
         themeOverrideRaw = effectiveIsDark ? "light" : "dark"
+    }
+
+    private func restoreSelectionIfNeeded() {
+        if let current = selectedEntry, entries.contains(where: { $0 === current }) {
+            return
+        }
+
+        if entries.isEmpty {
+            let entry = Entry()
+            modelContext.insert(entry)
+            selectedEntry = entry
+            return
+        }
+
+        if !didRestoreSelection, lastOpenedEntryAt != 0 {
+            let target = Date(timeIntervalSinceReferenceDate: lastOpenedEntryAt)
+            if let match = entries.first(where: {
+                abs($0.createdAt.timeIntervalSinceReferenceDate - target.timeIntervalSinceReferenceDate) < 0.0005
+            }) {
+                selectedEntry = match
+                didRestoreSelection = true
+                return
+            }
+        }
+
+        selectedEntry = entries.first
+        didRestoreSelection = true
     }
 
     private func addEntry() {
