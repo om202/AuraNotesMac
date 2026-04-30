@@ -23,8 +23,37 @@ final class Entry {
     }
 
     var previewTitle: String {
-        let firstLine = text.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-        let trimmed = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "New entry" : trimmed
+        for raw in text.split(whereSeparator: \.isNewline) {
+            let cleaned = Self.stripDecorations(String(raw))
+            if !cleaned.isEmpty { return cleaned }
+        }
+        return "New entry"
+    }
+
+    /// Removes list markers (●, ☐, ☑), numbered-list prefixes ("1."), quote bars,
+    /// and other symbol/format glyphs that appear in the rich-text mirror, so
+    /// the sidebar title shows the actual sentence the user wrote.
+    private static func stripDecorations(_ line: String) -> String {
+        var s = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Strip a leading numbered-list prefix like "1." or "12. ".
+        if let match = s.range(of: #"^\d+\.[ \t]+"#, options: .regularExpression) {
+            s.removeSubrange(match)
+        }
+
+        // Drop characters that aren't letters/numbers/whitespace/standard punctuation.
+        // Keeps smart quotes, em-dashes, etc.; removes ●, ☐, ☑, ▢, decorative symbols.
+        let kept = s.unicodeScalars.filter { scalar in
+            if scalar.properties.isEmoji { return false }
+            switch scalar.properties.generalCategory {
+            case .otherSymbol, .modifierSymbol, .format, .control,
+                 .surrogate, .privateUse, .unassigned:
+                return false
+            default:
+                return true
+            }
+        }
+        return String(String.UnicodeScalarView(kept))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

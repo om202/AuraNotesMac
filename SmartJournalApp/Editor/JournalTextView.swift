@@ -211,8 +211,7 @@ final class JournalTextView: NSTextView {
         guard shouldChangeText(in: range, replacementString: label) else { return }
         var attrs = typingAttributes
         attrs[.link] = url
-        attrs[.foregroundColor] = Theme.EditorColor.link
-        attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+        attrs[.foregroundColor] = Theme.EditorColor.body
         storage.replaceCharacters(in: range,
                                   with: NSAttributedString(string: label, attributes: attrs))
         didChangeText()

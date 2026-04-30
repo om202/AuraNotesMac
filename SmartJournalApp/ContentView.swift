@@ -172,55 +172,22 @@ private struct EntryRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.previewTitle)
-                    .font(.system(size: 13, weight: .bold))
-                    .lineLimit(1)
-                    .foregroundStyle(isSelected ? Color.white : .primary)
-
-                HStack(spacing: 6) {
-                    Text(dateLabel)
-                        .foregroundStyle(isSelected ? Color.white : .primary)
-                    Text(snippet)
-                        .foregroundStyle(isSelected ? Color.white.opacity(0.85) : .secondary)
-                        .lineLimit(1)
-                }
-                .font(.system(size: 12))
-            }
-            .padding(.vertical, Theme.Space.s)
-            .padding(.horizontal, Theme.Space.s)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.Radius.s, style: .continuous)
-                    .fill(isSelected ? Color.accentColor : Color.clear)
-            )
+            Text(entry.previewTitle)
+                .font(.system(size: 13, weight: .bold))
+                .lineLimit(1)
+                .foregroundStyle(isSelected ? Color.white : .primary)
+                .padding(.vertical, Theme.Space.s)
+                .padding(.horizontal, Theme.Space.s)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.Radius.s, style: .continuous)
+                        .fill(isSelected ? Color.accentColor : Color.clear)
+                )
 
             if !isSelected {
                 Divider()
             }
         }
-    }
-
-    private var dateLabel: String {
-        let cal = Calendar.current
-        let date = entry.createdAt
-        if cal.isDateInToday(date) {
-            return date.formatted(.dateTime.hour().minute())
-        }
-        if cal.isDateInYesterday(date) {
-            return "Yesterday"
-        }
-        if let days = cal.dateComponents([.day], from: date, to: .now).day, days < 7 {
-            return date.formatted(.dateTime.weekday(.wide))
-        }
-        return date.formatted(.dateTime.month(.defaultDigits).day().year(.twoDigits))
-    }
-
-    private var snippet: String {
-        let lines = entry.text.split(whereSeparator: \.isNewline)
-        let secondLine = lines.dropFirst().first.map(String.init)?
-            .trimmingCharacters(in: .whitespaces) ?? ""
-        return secondLine.isEmpty ? "No additional text" : secondLine
     }
 }
 

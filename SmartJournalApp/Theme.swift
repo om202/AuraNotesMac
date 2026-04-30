@@ -37,9 +37,10 @@ enum Theme {
         static let bodyLineHeightMultiple: CGFloat = 1.5
     }
 
-    /// In dark mode, an Xcode-inspired palette tuned for ≥ 7:1 contrast on
-    /// the 41/42/47 editor canvas. In light mode, defers to system colors so
-    /// the editor looks native on a white page.
+    /// All structural text — titles, headings, code, list markers, quote bars —
+    /// renders in the body color. The only special color is `link`, applied
+    /// via `linkTextAttributes` so it's strictly bound to link runs and never
+    /// inherits into surrounding typing attributes.
     enum EditorColor {
         static let background = dynamic(
             dark:  NSColor(srgbRed: 41/255, green: 42/255, blue: 47/255, alpha: 1),
@@ -49,33 +50,15 @@ enum Theme {
             dark:  NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 1),
             light: .labelColor
         )
-        static let title = dynamic(
-            dark:  NSColor(srgbRed: 0xFF/255, green: 0xA8/255, blue: 0xCB/255, alpha: 1),
-            light: .labelColor
-        )
-        static let heading = dynamic(
-            dark:  NSColor(srgbRed: 0xE5/255, green: 0xC9/255, blue: 0xFF/255, alpha: 1),
-            light: .labelColor
-        )
-        static let subheading = dynamic(
-            dark:  NSColor(srgbRed: 0x9C/255, green: 0xEC/255, blue: 0xFF/255, alpha: 1),
-            light: .labelColor
-        )
-        static let code = dynamic(
-            dark:  NSColor(srgbRed: 0xFF/255, green: 0xB1/255, blue: 0x99/255, alpha: 1),
-            light: .labelColor
-        )
+        static let title      = body
+        static let heading    = body
+        static let subheading = body
+        static let code       = body
+        static let quote      = body
+        static let listMarker = body
         static let link = dynamic(
             dark:  NSColor(srgbRed: 0x9E/255, green: 0xD1/255, blue: 0xFF/255, alpha: 1),
             light: .linkColor
-        )
-        static let quote = dynamic(
-            dark:  NSColor(srgbRed: 0xB8/255, green: 0xBE/255, blue: 0xC4/255, alpha: 1),
-            light: .tertiaryLabelColor
-        )
-        static let listMarker = dynamic(
-            dark:  NSColor(srgbRed: 0x9B/255, green: 0xE0/255, blue: 0xCC/255, alpha: 1),
-            light: .labelColor
         )
 
         private static func dynamic(dark: NSColor, light: NSColor) -> NSColor {

@@ -469,8 +469,7 @@ enum RichTextCommand {
         let display = selected.isEmpty ? urlText : selected
         let attrs: [NSAttributedString.Key: Any] = [
             .link: url,
-            .foregroundColor: Theme.EditorColor.link,
-            .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .foregroundColor: Theme.EditorColor.body,
             .font: (tv.typingAttributes[.font] as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
         ]
         let attrString = NSAttributedString(string: display, attributes: attrs)

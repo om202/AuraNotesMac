@@ -346,8 +346,7 @@ enum MarkdownConverter {
                 if let url = URL(string: urlStr) {
                     var attrs = baseAttrs
                     attrs[.link] = url
-                    attrs[.foregroundColor] = Theme.EditorColor.link
-                    attrs[.underlineStyle] = NSUnderlineStyle.single.rawValue
+                    attrs[.foregroundColor] = Theme.EditorColor.body
                     out.append(parseInline(label, baseAttrs: attrs))
                     i = pClose + 1
                     continue

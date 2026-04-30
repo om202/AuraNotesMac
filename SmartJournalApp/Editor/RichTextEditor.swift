@@ -64,6 +64,11 @@ struct RichTextEditor: NSViewRepresentable {
         textView.backgroundColor = bridge?.background.color ?? Theme.EditorColor.background
         textView.drawsBackground = true
         textView.insertionPointColor = Theme.EditorColor.body
+        textView.linkTextAttributes = [
+            .foregroundColor: Theme.EditorColor.link,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .cursor: NSCursor.pointingHand
+        ]
         textView.textContainerInset = NSSize(
             width: Theme.Space.xxl,
             height: Theme.Space.xxl
@@ -118,6 +123,7 @@ struct RichTextEditor: NSViewRepresentable {
            let attr = NSAttributedString(rtf: data, documentAttributes: nil) {
             let normalized = NSMutableAttributedString(attributedString: attr)
             EditorFont.applyFamily(family, to: normalized)
+            rehydrateAppearanceAwareColors(in: normalized)
             return normalized
         }
         let attrs: [NSAttributedString.Key: Any] = [
@@ -125,6 +131,26 @@ struct RichTextEditor: NSViewRepresentable {
             .foregroundColor: Theme.EditorColor.body
         ]
         return NSAttributedString(string: fallbackPlain, attributes: attrs)
+    }
+
+    /// RTF flattens dynamic NSColors to a fixed RGB at save time, so reloading
+    /// in a different appearance keeps the old (now wrong) color. Replace every
+    /// non-link `.foregroundColor` with the dynamic body color so the text
+    /// follows light/dark again. Strip baked styling from link runs so
+    /// `textView.linkTextAttributes` drives their color and underline.
+    private static func rehydrateAppearanceAwareColors(in s: NSMutableAttributedString) {
+        let full = NSRange(location: 0, length: s.length)
+        guard full.length > 0 else { return }
+        s.enumerateAttributes(in: full, options: []) { attrs, range, _ in
+            if attrs[.link] != nil {
+                s.removeAttribute(.foregroundColor, range: range)
+                s.removeAttribute(.underlineStyle, range: range)
+            } else if attrs[.foregroundColor] != nil {
+                s.addAttribute(.foregroundColor,
+                               value: Theme.EditorColor.body,
+                               range: range)
+            }
+        }
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
