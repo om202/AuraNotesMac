@@ -58,6 +58,19 @@ enum MarkdownConverter {
             // Handled by stripping the leading backslash before block matching.
             let line = stripLeadingEscape(raw)
 
+            // Thematic break: `---`, `***`, or `___` (≥3 of one char on a
+            // line by itself). Insert a 1×1 collapsed table-block that
+            // renders as a horizontal line via native AppKit table drawing.
+            if isThematicBreak(line) {
+                let payload = HorizontalRule.payload(baseAttrs: baseAttrs)
+                // The payload already contains its trailing newline plus an
+                // exit paragraph, so don't add another newline after it.
+                result.append(payload)
+                i += 1
+                numberCounter = 0
+                continue
+            }
+
             // Headings
             if let h = matchHeading(line) {
                 let (size, weight): (CGFloat, NSFont.Weight) = {
@@ -146,10 +159,17 @@ enum MarkdownConverter {
 
     // MARK: - Block matchers
 
+    private static func isThematicBreak(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count >= 3, let head = trimmed.first,
+              "-_*".contains(head) else { return false }
+        return trimmed.allSatisfy { $0 == head }
+    }
+
     private static func stripLeadingEscape(_ line: String) -> String {
         guard line.hasPrefix("\\"), line.count >= 2 else { return line }
         let next = line[line.index(after: line.startIndex)]
-        if "#-*+>".contains(next) { return String(line.dropFirst()) }
+        if "#-*+>_".contains(next) { return String(line.dropFirst()) }
         // \1.  → 1.
         if next.isNumber { return String(line.dropFirst()) }
         return line
