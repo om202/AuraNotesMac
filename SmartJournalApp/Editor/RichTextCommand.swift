@@ -479,6 +479,32 @@ enum RichTextCommand {
         tv.didChangeText()
     }
 
+    // MARK: Font scaling
+
+    static func scaleFonts(in tv: NSTextView, by factor: CGFloat) {
+        let clampSize: (CGFloat) -> CGFloat = { max(8, min(96, $0 * factor)) }
+
+        if let storage = tv.textStorage {
+            let full = NSRange(location: 0, length: storage.length)
+            if full.length > 0, tv.shouldChangeText(in: full, replacementString: nil) {
+                storage.beginEditing()
+                storage.enumerateAttribute(.font, in: full, options: []) { value, range, _ in
+                    let f = (value as? NSFont) ?? NSFont.systemFont(ofSize: Theme.FontSize.body)
+                    let newFont = NSFont(descriptor: f.fontDescriptor, size: clampSize(f.pointSize)) ?? f
+                    storage.addAttribute(.font, value: newFont, range: range)
+                }
+                storage.endEditing()
+                tv.didChangeText()
+            }
+        }
+
+        var typing = tv.typingAttributes
+        if let f = typing[.font] as? NSFont {
+            typing[.font] = NSFont(descriptor: f.fontDescriptor, size: clampSize(f.pointSize)) ?? f
+            tv.typingAttributes = typing
+        }
+    }
+
     // MARK: Undo / Redo
 
     static func performUndo(_ tv: NSTextView) {

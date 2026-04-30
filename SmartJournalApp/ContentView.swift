@@ -81,17 +81,8 @@ struct ContentView: View {
     @ViewBuilder
     private var detail: some View {
         if let entry = selectedEntry {
-            EntryEditor(entry: entry)
+            EntryEditor(entry: entry, onDelete: { pendingDeletion = entry })
                 .id(entry.persistentModelID)
-                .toolbar {
-                    ToolbarItem {
-                        Button(role: .destructive) {
-                            pendingDeletion = entry
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                    }
-                }
         } else {
             ContentUnavailableView {
                 Label("Select an entry", systemImage: "book")
@@ -237,6 +228,7 @@ private struct EntryRow: View {
 
 private struct EntryEditor: View {
     @Bindable var entry: Entry
+    var onDelete: () -> Void
     @State private var bridge = EditorBridge()
 
     var body: some View {
@@ -267,6 +259,52 @@ private struct EntryEditor: View {
         }
         .navigationTitle(titleLine)
         .navigationSubtitle(metadataLine)
+        .toolbar {
+            ToolbarItemGroup {
+                Button {
+                    scaleFonts(by: 1.0 / 1.1)
+                } label: {
+                    Label("Decrease Font Size", systemImage: "textformat.size.smaller")
+                }
+                .keyboardShortcut("-", modifiers: .command)
+                .help("Decrease font size (⌘−)")
+
+                Button {
+                    scaleFonts(by: 1.1)
+                } label: {
+                    Label("Increase Font Size", systemImage: "textformat.size.larger")
+                }
+                .keyboardShortcut("+", modifiers: .command)
+                .help("Increase font size (⌘+)")
+
+                Menu {
+                    ForEach(EditorSpread.allCases) { option in
+                        Button {
+                            bridge.setSpread(option)
+                        } label: {
+                            if option == bridge.spread {
+                                Label(option.displayName, systemImage: "checkmark")
+                            } else {
+                                Text(option.displayName)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Reading Width", systemImage: "arrow.left.and.right")
+                }
+                .help("Reading width")
+
+                Button(role: .destructive, action: onDelete) {
+                    Label("Delete", systemImage: "trash")
+                }
+                .help("Delete entry")
+            }
+        }
+    }
+
+    private func scaleFonts(by factor: CGFloat) {
+        guard let tv = bridge.textView else { return }
+        RichTextCommand.scaleFonts(in: tv, by: factor)
     }
 
     private var titleLine: String {

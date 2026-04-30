@@ -5,9 +5,63 @@
 
 import AppKit
 
+enum EditorSpread: String, CaseIterable, Identifiable {
+    case narrow, medium, wide, full
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .narrow: return "Narrow"
+        case .medium: return "Medium"
+        case .wide:   return "Wide"
+        case .full:   return "Full Width"
+        }
+    }
+
+    /// Maximum text column width in points. `nil` means use the full
+    /// available scroll-view width.
+    var maxWidth: CGFloat? {
+        switch self {
+        case .narrow: return 640
+        case .medium: return 820
+        case .wide:   return 1100
+        case .full:   return nil
+        }
+    }
+}
+
 final class JournalTextView: NSTextView {
     static let unchecked: Character = "☐"
     static let checked:   Character = "☑"
+
+    /// Reading-column width preference. Updating this re-centers the text
+    /// inside the available scroll-view area on the next layout pass.
+    var spread: EditorSpread = .full {
+        didSet { updateHorizontalInsetsForSpread() }
+    }
+
+    /// Symmetric vertical inset preserved across spread changes.
+    private let baseHorizontalInset: CGFloat = Theme.Space.xxl
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        updateHorizontalInsetsForSpread()
+    }
+
+    private func updateHorizontalInsetsForSpread() {
+        let target: CGFloat = {
+            guard let max = spread.maxWidth else { return baseHorizontalInset }
+            let extra = (bounds.width - max) / 2
+            return Swift.max(baseHorizontalInset, extra)
+        }()
+        if textContainerInset.width != target {
+            textContainerInset = NSSize(
+                width: target,
+                height: textContainerInset.height
+            )
+        }
+    }
 
     private static let toggleableMarkers: Set<UInt16> = [
         Character("☐").utf16.first!,
