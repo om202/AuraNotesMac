@@ -22,22 +22,22 @@ struct RichTextEditor: NSViewRepresentable {
         scrollView.autohidesScrollers = true
 
         let contentSize = scrollView.contentSize
-        let textContainer = NSTextContainer(
-            size: NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
-        )
-        textContainer.widthTracksTextView = true
-        textContainer.lineFragmentPadding = 0
-
-        let layoutManager = NSLayoutManager()
-        layoutManager.addTextContainer(textContainer)
-
-        let textStorage = NSTextStorage()
-        textStorage.addLayoutManager(layoutManager)
-
         let family = EditorFont.currentFamily
         let defaultFont = family.font(size: Theme.FontSize.body)
 
-        let textView = JournalTextView(frame: .zero, textContainer: textContainer)
+        // TextKit 2: required for the inline Writing Tools animation
+        // (without it the system falls back to "limited" panel-style UX where
+        // text vanishes and reappears instead of animating in place).
+        let textView = JournalTextView(usingTextLayoutManager: true)
+        textView.frame = .zero
+        if let tc = textView.textContainer {
+            tc.widthTracksTextView = true
+            tc.lineFragmentPadding = 0
+            tc.containerSize = NSSize(
+                width: contentSize.width,
+                height: CGFloat.greatestFiniteMagnitude
+            )
+        }
         textView.delegate = context.coordinator
         textView.allowsUndo = true
         textView.isRichText = true
@@ -97,7 +97,7 @@ struct RichTextEditor: NSViewRepresentable {
         textView.autoresizingMask = .width
 
         if let attr = Self.attributedString(from: data, fallbackPlain: plainText) {
-            textStorage.setAttributedString(attr)
+            textView.textStorage?.setAttributedString(attr)
         }
 
         scrollView.documentView = textView

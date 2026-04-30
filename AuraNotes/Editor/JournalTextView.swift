@@ -81,39 +81,47 @@ final class JournalTextView: NSTextView {
     private func repositionAIButton() {
         let sel = selectedRange()
         guard sel.length > 0,
-              let lm = layoutManager,
-              let tc = textContainer else {
+              let win = window,
+              let viewRect = selectionRectInView(for: sel) else {
             aiButtonHost.isHidden = true
             return
         }
-        let glyphRange = lm.glyphRange(forCharacterRange: sel,
-                                       actualCharacterRange: nil)
-        guard glyphRange.length > 0 else {
-            aiButtonHost.isHidden = true
-            return
-        }
-        let rect = lm.boundingRect(forGlyphRange: glyphRange, in: tc)
-        let inset = textContainerOrigin
+        _ = win // silence unused-binding analyzers; we only need the window for screen→view conversions inside selectionRectInView
         let size = aiButtonHost.fittingSize.width > 0
             ? aiButtonHost.fittingSize
             : NSSize(width: 64, height: 28)
 
-        // Anchor to the top-right of the selection rect, lifted just above it.
-        var x = rect.maxX + inset.x - size.width
-        var y = rect.minY + inset.y - size.height - 4
+        // Anchor to the top-right of the selection's first-line rect.
+        var x = viewRect.maxX - size.width
+        var y = viewRect.minY - size.height - 4
 
-        // Keep inside the visible text area.
-        x = max(inset.x, min(x, bounds.width - size.width - 4))
+        x = max(textContainerOrigin.x, min(x, bounds.width - size.width - 4))
         if y < 4 {
-            y = rect.maxY + inset.y + 4 // flip below if there's no room above
+            y = viewRect.maxY + 4
         }
 
         aiButtonHost.frame = NSRect(x: x, y: y, width: size.width, height: size.height)
         aiButtonHost.isHidden = false
     }
 
+    /// Bounding rect of the selection's first line in our own coordinate
+    /// space. Works on both TextKit 1 and TextKit 2 — `firstRect` is part of
+    /// `NSTextInputClient` and goes through whichever layout manager is active.
+    private func selectionRectInView(for range: NSRange) -> NSRect? {
+        guard range.length > 0, let win = window else { return nil }
+        let screenRect = firstRect(forCharacterRange: range, actualRange: nil)
+        guard screenRect.width > 0 || screenRect.height > 0 else { return nil }
+        let windowRect = win.convertFromScreen(screenRect)
+        return convert(windowRect, from: nil)
+    }
+
     private func invokeWritingTools() {
         window?.makeFirstResponder(self)
+
+        if !Self.isAppleIntelligenceAvailable {
+            presentAppleIntelligenceUnavailableAlert()
+            return
+        }
 
         // First try the responder action — works on macOS 15+ when the system
         // exposes Writing Tools as an action on NSTextView.
@@ -126,20 +134,54 @@ final class JournalTextView: NSTextView {
         popUpSelectionContextMenu()
     }
 
+    static var isAppleIntelligenceAvailable: Bool {
+        if #available(macOS 15.0, *) {
+            return NSWritingToolsCoordinator.isWritingToolsAvailable
+        }
+        return false
+    }
+
+    private func presentAppleIntelligenceUnavailableAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Apple Intelligence isn't enabled"
+        alert.informativeText = """
+        Writing Tools needs Apple Intelligence to proofread, rewrite, and \
+        summarize your notes.
+
+        Enable it from System Settings → Apple Intelligence & Siri. The \
+        first-time download takes a few minutes.
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Not Now")
+
+        let handle: (NSApplication.ModalResponse) -> Void = { response in
+            guard response == .alertFirstButtonReturn else { return }
+            let candidates = [
+                "x-apple.systempreferences:com.apple.Siri-Settings.extension",
+                "x-apple.systempreferences:com.apple.preference.ai",
+                "x-apple.systempreferences:"
+            ]
+            for raw in candidates {
+                if let url = URL(string: raw),
+                   NSWorkspace.shared.open(url) { return }
+            }
+        }
+
+        if let win = window {
+            alert.beginSheetModal(for: win, completionHandler: handle)
+        } else {
+            handle(alert.runModal())
+        }
+    }
+
     private func popUpSelectionContextMenu() {
-        guard let lm = layoutManager,
-              let tc = textContainer,
-              let win = window else { return }
-
+        guard let win = window else { return }
         let r = selectedRange()
-        guard r.length > 0 else { return }
+        guard r.length > 0,
+              let viewRect = selectionRectInView(for: r) else { return }
 
-        let glyphRange = lm.glyphRange(forCharacterRange: r,
-                                       actualCharacterRange: nil)
-        let rect = lm.boundingRect(forGlyphRange: glyphRange, in: tc)
-        let inset = textContainerOrigin
-        let pointInView = NSPoint(x: rect.midX + inset.x,
-                                  y: rect.maxY + inset.y)
+        let pointInView = NSPoint(x: viewRect.midX, y: viewRect.maxY)
         let pointInWindow = convert(pointInView, to: nil)
 
         let synthetic = NSEvent.mouseEvent(
@@ -442,32 +484,21 @@ final class JournalTextView: NSTextView {
     }
 
     override func mouseDown(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        let containerPoint = NSPoint(x: point.x - textContainerOrigin.x,
-                                     y: point.y - textContainerOrigin.y)
-        guard let lm = layoutManager, let tc = textContainer else {
-            super.mouseDown(with: event); return
-        }
-
-        let glyphIndex = lm.glyphIndex(for: containerPoint, in: tc)
-        let glyphRect  = lm.boundingRect(forGlyphRange: NSRange(location: glyphIndex, length: 1), in: tc)
-
-        guard glyphRect.contains(containerPoint) else {
-            super.mouseDown(with: event); return
-        }
-
-        let charIndex = lm.characterIndexForGlyph(at: glyphIndex)
-        let nsString  = string as NSString
+        let pointInView = convert(event.locationInWindow, from: nil)
+        let charIndex = characterIndexForInsertion(at: pointInView)
+        let nsString = string as NSString
         guard charIndex < nsString.length else {
             super.mouseDown(with: event); return
         }
 
         let scalar = nsString.character(at: charIndex)
         if Self.toggleableMarkers.contains(scalar) {
-            // Only toggle when the character begins a paragraph (so it's a todo marker,
-            // not an inline use of the glyph).
-            let paraStart = nsString.paragraphRange(for: NSRange(location: charIndex, length: 0)).location
-            if charIndex == paraStart {
+            let paraStart = nsString.paragraphRange(
+                for: NSRange(location: charIndex, length: 0)
+            ).location
+            if charIndex == paraStart,
+               selectionRectInView(for: NSRange(location: charIndex, length: 1))?
+                   .contains(pointInView) == true {
                 toggleTodoCharacter(at: charIndex)
                 return
             }
