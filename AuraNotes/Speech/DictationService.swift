@@ -41,7 +41,7 @@ enum DictationError: Error, LocalizedError {
 actor DictationService {
     private var engine: AVAudioEngine?
     private var analyzer: SpeechAnalyzer?
-    private var transcriber: SpeechTranscriber?
+    private var transcriber: DictationTranscriber?
     private var inputContinuation: AsyncStream<AnalyzerInput>.Continuation?
     private var resultsTask: Task<Void, Never>?
     private var pipeline: AudioPipeline?
@@ -57,7 +57,7 @@ actor DictationService {
         try await Self.requestSpeechAuthorization()
         try await Self.requestMicrophoneAuthorization()
 
-        let supported = await SpeechTranscriber.supportedLocales
+        let supported = await DictationTranscriber.supportedLocales
         let chosen = supported.first { $0.identifier(.bcp47) == locale.identifier(.bcp47) }
             ?? supported.first { $0.language.languageCode == locale.language.languageCode }
             ?? Locale(identifier: "en-US")
@@ -65,11 +65,9 @@ actor DictationService {
             throw DictationError.localeUnsupported
         }
 
-        let transcriber = SpeechTranscriber(
+        let transcriber = DictationTranscriber(
             locale: chosen,
-            transcriptionOptions: [],
-            reportingOptions: [.volatileResults],
-            attributeOptions: []
+            preset: .progressiveLongDictation
         )
         self.transcriber = transcriber
 
@@ -181,7 +179,10 @@ private final class AudioPipeline: @unchecked Sendable {
         if sourceFormat == targetFormat {
             converter = nil
         } else {
-            converter = AVAudioConverter(from: sourceFormat, to: targetFormat)
+            let conv = AVAudioConverter(from: sourceFormat, to: targetFormat)
+            conv?.primeMethod = .none
+            conv?.sampleRateConverterQuality = .min
+            converter = conv
         }
     }
 
