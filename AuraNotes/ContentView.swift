@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 
 import SwiftUI

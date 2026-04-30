@@ -1,6 +1,6 @@
 //
 //  MarkdownSerializer.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 //  Inverse of MarkdownConverter: turns the editor's NSAttributedString into
 //  Markdown so OURS → MD → OURS round-trips with no formatting loss for the

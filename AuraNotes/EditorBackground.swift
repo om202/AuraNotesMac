@@ -1,6 +1,6 @@
 //
 //  EditorBackground.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 
 import AppKit

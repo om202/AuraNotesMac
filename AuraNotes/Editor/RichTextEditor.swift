@@ -1,6 +1,6 @@
 //
 //  RichTextEditor.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 
 import SwiftUI

@@ -65,7 +65,7 @@ Bear, Typora, iA Writer, Obsidian (live mode) all use the AppKit/UIKit text engi
 ## File structure
 
 ```
-SmartJournalApp/
+AuraNotes/
   Editor/
     MarkdownEditor.swift          // NSViewRepresentable wrapper        ~80 LOC
     MarkdownTextView.swift        // NSTextView subclass, key handling  ~120 LOC

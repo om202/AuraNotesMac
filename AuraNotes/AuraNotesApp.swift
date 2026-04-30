@@ -1,13 +1,13 @@
 //
-//  SmartJournalAppApp.swift
-//  SmartJournalApp
+//  AuraNotesApp.swift
+//  AuraNotes
 //
 
 import SwiftUI
 import SwiftData
 
 @main
-struct SmartJournalAppApp: App {
+struct AuraNotesApp: App {
     init() {
         _ = EditorFont.registerBundledFonts
     }

@@ -1,6 +1,6 @@
 //
 //  EditorBridge.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 
 import AppKit

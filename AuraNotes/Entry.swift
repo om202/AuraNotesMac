@@ -1,6 +1,6 @@
 //
 //  Entry.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 
 import Foundation

@@ -1,6 +1,6 @@
 //
 //  EditorToolbar.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 
 import SwiftUI

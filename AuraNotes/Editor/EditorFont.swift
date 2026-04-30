@@ -1,6 +1,6 @@
 //
 //  EditorFont.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 
 import AppKit

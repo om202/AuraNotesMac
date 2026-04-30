@@ -1,6 +1,6 @@
 //
 //  MarkdownConverter.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 
 import AppKit

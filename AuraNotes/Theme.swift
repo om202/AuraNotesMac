@@ -1,6 +1,6 @@
 //
 //  Theme.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 
 import SwiftUI

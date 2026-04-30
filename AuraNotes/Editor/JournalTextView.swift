@@ -1,6 +1,6 @@
 //
 //  JournalTextView.swift
-//  SmartJournalApp
+//  AuraNotes
 //
 
 import AppKit
