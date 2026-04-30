@@ -109,9 +109,11 @@ enum MarkdownSerializer {
         let len = ns.length
         guard len > 0 else { return nil }
 
-        // Bullet: "● \t" or "●\t"
-        if ns.hasPrefix("● \t") { return .bullet(length: 3) }
-        if ns.hasPrefix("●\t")  { return .bullet(length: 2) }
+        // Bullet: any of the level glyphs (●, ○, ▪) followed by tab.
+        for glyph in ["●", "○", "▪"] {
+            if ns.hasPrefix("\(glyph) \t") { return .bullet(length: 3) }
+            if ns.hasPrefix("\(glyph)\t")  { return .bullet(length: 2) }
+        }
 
         // Todo: "☐\t" / "☑\t"
         if ns.hasPrefix("☐\t") { return .todoUnchecked(length: 2) }

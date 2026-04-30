@@ -302,7 +302,7 @@ struct RichTextEditor: NSViewRepresentable {
             )
             let raw = nsString.substring(with: para)
             let line = raw.hasSuffix("\n") ? String(raw.dropLast()) : raw
-            guard RichTextCommand.detectList(in: line) != nil else {
+            guard let detected = RichTextCommand.detectList(in: line) else {
                 return false
             }
 
@@ -333,7 +333,23 @@ struct RichTextEditor: NSViewRepresentable {
             guard tv.shouldChangeText(in: para, replacementString: nil) else {
                 return true
             }
+            storage.beginEditing()
             storage.addAttribute(.paragraphStyle, value: style, range: para)
+
+            // Bullet lists: swap the glyph to match the new level so the
+            // hierarchy reads at a glance even when indent is squashed.
+            if case .bullet = detected, para.length > 0 {
+                let glyphRange = NSRange(location: para.location, length: 1)
+                let glyphAttrs = storage.attributes(
+                    at: glyphRange.location, effectiveRange: nil
+                )
+                let newGlyph = RichTextCommand.bulletGlyph(forLevel: newLevel)
+                storage.replaceCharacters(
+                    in: glyphRange,
+                    with: NSAttributedString(string: newGlyph, attributes: glyphAttrs)
+                )
+            }
+            storage.endEditing()
             tv.didChangeText()
 
             var typing = tv.typingAttributes
@@ -467,8 +483,19 @@ struct RichTextEditor: NSViewRepresentable {
             )
             switch detected {
             case .bullet:
+                // New line inherits the previous paragraph's indent level
+                // via paragraph style; pick the matching glyph so nesting
+                // depth stays visually consistent.
+                let prevStyle = (baseAttrs[.paragraphStyle] as? NSParagraphStyle)
+                    ?? NSParagraphStyle.default
+                let baseFont = (baseAttrs[.font] as? NSFont)
+                    ?? NSFont.systemFont(ofSize: Theme.FontSize.body)
+                let stop = baseFont.pointSize * 1.6
+                let level = stop > 0
+                    ? Int(round(prevStyle.firstLineHeadIndent / stop))
+                    : 0
                 continuation.append(
-                    RichTextCommand.bulletPrefix(baseAttrs: baseAttrs)
+                    RichTextCommand.bulletPrefix(forLevel: level, baseAttrs: baseAttrs)
                 )
             case .numbered(let n, _):
                 continuation.append(

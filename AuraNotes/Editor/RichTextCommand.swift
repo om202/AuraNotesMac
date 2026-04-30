@@ -231,10 +231,22 @@ enum RichTextCommand {
         return result
     }
 
+    /// Glyph used at each indent level. Levels deeper than the array
+    /// length clamp to the last entry. ● filled disc anchors the list,
+    /// ○ open circle marks subordination, ▪ small square distinguishes
+    /// further nesting from the disc/circle pair.
+    static let bulletGlyphs: [String] = ["●", "○", "▪"]
+
+    static func bulletGlyph(forLevel level: Int) -> String {
+        let idx = max(0, min(level, bulletGlyphs.count - 1))
+        return bulletGlyphs[idx]
+    }
+
     static func bulletPrefix(
+        forLevel level: Int = 0,
         baseAttrs: [NSAttributedString.Key: Any]
     ) -> NSAttributedString {
-        markerPrefix(marker: "●", baseAttrs: baseAttrs)
+        markerPrefix(marker: bulletGlyph(forLevel: level), baseAttrs: baseAttrs)
     }
 
     static func todoPrefix(
@@ -269,7 +281,7 @@ enum RichTextCommand {
 
     private enum ListKind {
         case bullet, numbered, todo
-        static let bulletRegex  = try! NSRegularExpression(pattern: #"^●[ \t]+"#)
+        static let bulletRegex  = try! NSRegularExpression(pattern: #"^[●○▪][ \t]+"#)
         static let numberRegex  = try! NSRegularExpression(pattern: #"^\d+\.[ \t]+"#)
         static let todoRegex    = try! NSRegularExpression(pattern: #"^[☐☑][ \t]+"#)
 
