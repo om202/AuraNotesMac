@@ -422,16 +422,21 @@ enum RichTextCommand {
             }
         }
 
-        // The first surviving item's number defines the start.
+        // The first surviving item's number defines the start of its level.
         let firstPara = initialNS.paragraphRange(
             for: NSRange(location: runStart, length: 0)
         )
         let firstLine = stripTrailingNewline(initialNS.substring(with: firstPara))
-        let startNumber = max(1, parseLeadingNumber(firstLine) ?? 1)
+        let firstStartNumber = max(1, parseLeadingNumber(firstLine) ?? 1)
+        let firstLevel = indentLevel(of: firstPara, in: storage)
 
-        // Walk forward, rewriting each marker. We re-fetch the live string
-        // every iteration because the storage shifts as digits change.
-        var counter = startNumber
+        // Walk forward, tracking a counter per indent level. Going deeper
+        // resets the deeper level's counter to 1; coming back up clears any
+        // deeper counters so a re-entry restarts cleanly. The very first
+        // item's level starts from its existing number; everything else
+        // restarts at 1 the first time its level is entered.
+        var counters: [Int: Int] = [:]
+        var isFirst = true
         var loc = runStart
         while loc < storage.length {
             let curNS = storage.string as NSString
@@ -440,6 +445,24 @@ enum RichTextCommand {
             let line = stripTrailingNewline(curNS.substring(with: pr))
             guard isNumberedLine(line) else { break }
 
+            let level = indentLevel(of: pr, in: storage)
+
+            // Drop counters for deeper levels — they were nested under a
+            // shallower run that just ended.
+            for l in counters.keys where l > level { counters[l] = nil }
+
+            let value: Int
+            if isFirst {
+                value = firstStartNumber
+                _ = firstLevel    // explicitly read for clarity; level == firstLevel here
+            } else if let existing = counters[level] {
+                value = existing + 1
+            } else {
+                value = 1
+            }
+            counters[level] = value
+            isFirst = false
+
             let lineNS = line as NSString
             let dotRange = lineNS.range(of: ".")
             if dotRange.location != NSNotFound, dotRange.location > 0 {
@@ -447,7 +470,7 @@ enum RichTextCommand {
                     location: pr.location, length: dotRange.location
                 )
                 let curDigits = curNS.substring(with: digitsRange)
-                let newDigits = "\(counter)"
+                let newDigits = "\(value)"
                 if curDigits != newDigits {
                     let attrs = storage.attributes(
                         at: digitsRange.location, effectiveRange: nil
@@ -464,8 +487,24 @@ enum RichTextCommand {
                 for: NSRange(location: loc, length: 0)
             )
             loc = updatedPr.location + updatedPr.length
-            counter += 1
         }
+    }
+
+    /// Indent level of a paragraph, derived from its `firstLineHeadIndent`
+    /// divided by the per-level step (`pointSize * 1.6`). Mirrors the unit
+    /// `handleListIndent` uses to shift list paragraphs.
+    private static func indentLevel(of paraRange: NSRange,
+                                    in storage: NSTextStorage) -> Int {
+        guard paraRange.length > 0,
+              paraRange.location < storage.length else { return 0 }
+        let attrs = storage.attributes(at: paraRange.location, effectiveRange: nil)
+        let style = (attrs[.paragraphStyle] as? NSParagraphStyle)
+            ?? NSParagraphStyle.default
+        let font = (attrs[.font] as? NSFont)
+            ?? NSFont.systemFont(ofSize: Theme.FontSize.body)
+        let stop = font.pointSize * 1.6
+        guard stop > 0 else { return 0 }
+        return max(0, Int(round(style.firstLineHeadIndent / stop)))
     }
 
     private static func stripTrailingNewline(_ s: String) -> String {

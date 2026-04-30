@@ -225,11 +225,121 @@ struct RichTextEditor: NSViewRepresentable {
 
         func textView(_ textView: NSTextView,
                       doCommandBy selector: Selector) -> Bool {
-            if selector == #selector(NSResponder.insertNewline(_:)) {
+            switch selector {
+            case #selector(NSResponder.insertNewline(_:)):
                 if handleListContinuation(in: textView) { return true }
                 if handleHeadingExit(in: textView) { return true }
+            case #selector(NSResponder.deleteBackward(_:)):
+                if handleListBackspaceExit(in: textView) { return true }
+            case #selector(NSResponder.insertTab(_:)):
+                if handleListIndent(in: textView, outdent: false) { return true }
+            case #selector(NSResponder.insertBacktab(_:)):
+                if handleListIndent(in: textView, outdent: true) { return true }
+            default:
+                break
             }
             return false
+        }
+
+        /// Backspace at the very start of a list item's content (just past
+        /// the marker prefix) exits the list — mirroring Return-on-empty.
+        /// Matches Apple Notes / Bear conventions.
+        private func handleListBackspaceExit(in tv: NSTextView) -> Bool {
+            guard tv.selectedRange.length == 0,
+                  let storage = tv.textStorage else { return false }
+            let cursor = tv.selectedRange.location
+            let nsString = storage.string as NSString
+            let para = nsString.paragraphRange(
+                for: NSRange(location: cursor, length: 0)
+            )
+            let raw = nsString.substring(with: para)
+            let line = raw.hasSuffix("\n") ? String(raw.dropLast()) : raw
+            guard let detected = RichTextCommand.detectList(in: line) else {
+                return false
+            }
+            guard cursor == para.location + detected.prefixLength else {
+                return false
+            }
+
+            let toDelete = NSRange(location: para.location,
+                                   length: detected.prefixLength)
+            guard tv.shouldChangeText(in: toDelete, replacementString: "") else {
+                return true
+            }
+            storage.beginEditing()
+            storage.replaceCharacters(in: toDelete, with: "")
+            let newPara = (storage.string as NSString).paragraphRange(
+                for: NSRange(location: para.location, length: 0)
+            )
+            if newPara.length > 0 {
+                storage.addAttribute(
+                    .paragraphStyle,
+                    value: NSParagraphStyle.default,
+                    range: newPara
+                )
+            }
+            storage.endEditing()
+            tv.didChangeText()
+
+            var typing = tv.typingAttributes
+            typing[.paragraphStyle] = NSParagraphStyle.default
+            tv.typingAttributes = typing
+
+            tv.setSelectedRange(NSRange(location: para.location, length: 0))
+            return true
+        }
+
+        /// Tab / Shift-Tab on a list line shifts the paragraph one indent
+        /// level in or out. Outside lists, returns false so the system's
+        /// default Tab (inserts a tab character) still works.
+        private func handleListIndent(in tv: NSTextView, outdent: Bool) -> Bool {
+            guard tv.selectedRange.length == 0,
+                  let storage = tv.textStorage else { return false }
+            let cursor = tv.selectedRange.location
+            let nsString = storage.string as NSString
+            let para = nsString.paragraphRange(
+                for: NSRange(location: cursor, length: 0)
+            )
+            let raw = nsString.substring(with: para)
+            let line = raw.hasSuffix("\n") ? String(raw.dropLast()) : raw
+            guard RichTextCommand.detectList(in: line) != nil else {
+                return false
+            }
+
+            let attrs = storage.attributes(at: para.location, effectiveRange: nil)
+            let baseFont = (attrs[.font] as? NSFont)
+                ?? NSFont.systemFont(ofSize: Theme.FontSize.body)
+            let stop = baseFont.pointSize * 1.6
+
+            let oldStyle = (attrs[.paragraphStyle] as? NSParagraphStyle)
+                ?? NSParagraphStyle.default
+            let currentLevel = Int(round(oldStyle.firstLineHeadIndent / stop))
+            let newLevel = outdent
+                ? max(0, currentLevel - 1)
+                : min(8, currentLevel + 1)
+            // No movement (e.g., Shift-Tab at level 0): swallow the key
+            // anyway so the system doesn't insert a literal tab.
+            if newLevel == currentLevel { return true }
+
+            let style = NSMutableParagraphStyle()
+            style.firstLineHeadIndent = CGFloat(newLevel) * stop
+            style.headIndent = CGFloat(newLevel + 1) * stop
+            style.tabStops = [
+                NSTextTab(textAlignment: .left,
+                          location: CGFloat(newLevel + 1) * stop,
+                          options: [:])
+            ]
+
+            guard tv.shouldChangeText(in: para, replacementString: nil) else {
+                return true
+            }
+            storage.addAttribute(.paragraphStyle, value: style, range: para)
+            tv.didChangeText()
+
+            var typing = tv.typingAttributes
+            typing[.paragraphStyle] = style
+            tv.typingAttributes = typing
+            return true
         }
 
         /// Return at the end of a heading paragraph drops the next line back
