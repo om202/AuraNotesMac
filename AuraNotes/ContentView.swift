@@ -8,10 +8,20 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var systemColorScheme
     @Query(sort: \Entry.createdAt, order: .reverse) private var entries: [Entry]
 
     @State private var selectedEntry: Entry?
     @State private var pendingDeletion: Entry?
+    @AppStorage("themeOverride") private var themeOverrideRaw: String = ""
+
+    private var themeOverride: ColorScheme? {
+        switch themeOverrideRaw {
+        case "light": return .light
+        case "dark":  return .dark
+        default:      return nil
+        }
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -19,6 +29,7 @@ struct ContentView: View {
         } detail: {
             detail
         }
+        .preferredColorScheme(themeOverride)
         .confirmationDialog(
             "Delete this entry?",
             isPresented: deletionBinding,
@@ -61,6 +72,17 @@ struct ContentView: View {
         )
         .toolbar {
             ToolbarItem {
+                Button(action: toggleThemeOverride) {
+                    Label(
+                        effectiveIsDark ? "Switch to Light" : "Switch to Dark",
+                        systemImage: effectiveIsDark ? "sun.max.fill" : "moon.fill"
+                    )
+                }
+                .help(effectiveIsDark
+                      ? "Force light appearance"
+                      : "Force dark appearance")
+            }
+            ToolbarItem {
                 Button(action: addEntry) {
                     Label("New Entry", systemImage: "square.and.pencil")
                 }
@@ -94,6 +116,15 @@ struct ContentView: View {
 
     private var groupedEntries: [EntryGroup] {
         EntryGroup.group(entries)
+    }
+
+    private var effectiveIsDark: Bool {
+        if let override = themeOverride { return override == .dark }
+        return systemColorScheme == .dark
+    }
+
+    private func toggleThemeOverride() {
+        themeOverrideRaw = effectiveIsDark ? "light" : "dark"
     }
 
     private func addEntry() {
