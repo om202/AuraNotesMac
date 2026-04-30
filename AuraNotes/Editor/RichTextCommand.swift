@@ -54,11 +54,35 @@ enum RichTextCommand {
                 ? EditorFont.currentFamily.font(size: f.pointSize)
                 : NSFont.monospacedSystemFont(ofSize: f.pointSize, weight: .regular)
             storage.addAttribute(.font, value: newFont, range: sub)
-            let color: NSColor = allMono ? Theme.EditorColor.body : Theme.EditorColor.code
-            storage.addAttribute(.foregroundColor, value: color, range: sub)
+
+            // Don't write a foreground color over .link runs — their
+            // visual color is owned by `linkTextAttributes` and any
+            // explicit foregroundColor here defeats it.
+            applyForegroundColorRespectingLinks(
+                in: storage,
+                range: sub,
+                color: allMono ? Theme.EditorColor.body : Theme.EditorColor.code
+            )
         }
         storage.endEditing()
         tv.didChangeText()
+    }
+
+    /// Set `.foregroundColor` on every sub-range of `range` that does not
+    /// have a `.link` attribute. Link runs keep neutral storage so
+    /// `linkTextAttributes` can drive their color at draw time.
+    private static func applyForegroundColorRespectingLinks(
+        in storage: NSTextStorage,
+        range: NSRange,
+        color: NSColor
+    ) {
+        storage.enumerateAttribute(.link, in: range, options: []) { value, sub, _ in
+            if value == nil {
+                storage.addAttribute(.foregroundColor, value: color, range: sub)
+            } else {
+                storage.removeAttribute(.foregroundColor, range: sub)
+            }
+        }
     }
 
     // MARK: Headings
@@ -380,6 +404,14 @@ enum RichTextCommand {
         storage.replaceCharacters(in: paraRange, with: result)
         tv.didChangeText()
 
+        // Preserve the user's selection over the affected paragraphs so
+        // they can immediately apply another command (e.g., toggle bullets
+        // then ⌘B). Without this the selection collapses to a caret.
+        let newRange = NSRange(location: paraRange.location, length: result.length)
+        if newRange.location + newRange.length <= storage.length {
+            tv.setSelectedRange(newRange)
+        }
+
         // After applying numbered prefixes, merge with any adjacent numbered
         // run above so the visible sequence is continuous.
         if kind == .numbered {
@@ -689,10 +721,13 @@ enum RichTextCommand {
         guard !urlText.isEmpty, let url = URL(string: urlText) else { return }
 
         let display = selected.isEmpty ? urlText : selected
+        // Don't write foregroundColor — `tv.linkTextAttributes` drives the
+        // visible link color, and an explicit foregroundColor here would
+        // override it until the entry is reloaded.
         let attrs: [NSAttributedString.Key: Any] = [
             .link: url,
-            .foregroundColor: Theme.EditorColor.body,
-            .font: (tv.typingAttributes[.font] as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            .font: (tv.typingAttributes[.font] as? NSFont)
+                ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
         ]
         let attrString = NSAttributedString(string: display, attributes: attrs)
         guard tv.shouldChangeText(in: range, replacementString: display) else { return }
@@ -807,14 +842,11 @@ enum RichTextCommand {
         let range = tv.selectedRange
 
         if range.length == 0 {
-            // Update typing attributes only — affects the next keystroke
             var typing = tv.typingAttributes
-            let font = (typing[.font] as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
-            var traits = font.fontDescriptor.symbolicTraits
-            if traits.contains(trait) { traits.remove(trait) } else { traits.insert(trait) }
-            let desc = font.fontDescriptor.withSymbolicTraits(traits)
-            let newFont = NSFont(descriptor: desc, size: font.pointSize) ?? font
-            typing[.font] = newFont
+            let font = (typing[.font] as? NSFont)
+                ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+            let isOn = fontHasTrait(font, trait: trait)
+            typing[.font] = setTrait(on: font, trait: trait, enabled: !isOn)
             tv.typingAttributes = typing
             return
         }
@@ -823,23 +855,62 @@ enum RichTextCommand {
         let storage = tv.textStorage!
         storage.beginEditing()
 
+        // Detect "all have trait" using a definition that also catches
+        // bold-by-weight (a heading's bold is set via weight, not the
+        // symbolic .bold trait, so the symbolic check alone makes the
+        // heading look "not bold" and forces a second ⌘B to clear).
         var allHaveTrait = true
         storage.enumerateAttribute(.font, in: range, options: []) { value, _, stop in
             let f = (value as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
-            if !f.fontDescriptor.symbolicTraits.contains(trait) {
+            if !fontHasTrait(f, trait: trait) {
                 allHaveTrait = false; stop.pointee = true
             }
         }
         storage.enumerateAttribute(.font, in: range, options: []) { value, sub, _ in
             let f = (value as? NSFont) ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
-            var traits = f.fontDescriptor.symbolicTraits
-            if allHaveTrait { traits.remove(trait) } else { traits.insert(trait) }
-            let desc = f.fontDescriptor.withSymbolicTraits(traits)
-            let newFont = NSFont(descriptor: desc, size: f.pointSize) ?? f
+            let newFont = setTrait(on: f, trait: trait, enabled: !allHaveTrait)
             storage.addAttribute(.font, value: newFont, range: sub)
         }
         storage.endEditing()
         tv.didChangeText()
+    }
+
+    /// True if the font carries `trait` via either the symbolic traits or
+    /// (for bold only) a heavy-enough weight in the descriptor's traits dict.
+    private static func fontHasTrait(_ font: NSFont,
+                                     trait: NSFontDescriptor.SymbolicTraits) -> Bool {
+        let traits = font.fontDescriptor.symbolicTraits
+        if traits.contains(trait) { return true }
+        if trait == .bold,
+           font.editorWeight.rawValue >= NSFont.Weight.semibold.rawValue {
+            return true
+        }
+        return false
+    }
+
+    /// Build a font that has `trait` either applied or removed. For bold
+    /// we also synchronize the weight axis so headings (bold-by-weight)
+    /// actually un-bold on the first ⌘B press.
+    private static func setTrait(on font: NSFont,
+                                 trait: NSFontDescriptor.SymbolicTraits,
+                                 enabled: Bool) -> NSFont {
+        var traits = font.fontDescriptor.symbolicTraits
+        if enabled { traits.insert(trait) } else { traits.remove(trait) }
+
+        var weight = font.editorWeight
+        if trait == .bold {
+            if enabled {
+                weight = .bold
+            } else if weight.rawValue >= NSFont.Weight.semibold.rawValue {
+                weight = .regular
+            }
+        }
+
+        var descriptor = font.fontDescriptor.withSymbolicTraits(traits)
+        descriptor = descriptor.addingAttributes([
+            .traits: [NSFontDescriptor.TraitKey.weight: weight.rawValue]
+        ])
+        return NSFont(descriptor: descriptor, size: font.pointSize) ?? font
     }
 
     private static func toggleAttribute(_ tv: NSTextView,
