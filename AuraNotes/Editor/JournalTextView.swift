@@ -446,7 +446,44 @@ final class JournalTextView: NSTextView {
     }
 
     override func paste(_ sender: Any?) {
-        pasteAsPlainText(sender)
+        let outcome = PasteImporter.resolve(
+            from: NSPasteboard.general,
+            baseAttrs: typingAttributes
+        )
+        switch outcome {
+        case .attributed(let attr):
+            insertAttributedAtSelection(attr)
+        case .plain(let s):
+            insertPlainAtSelection(s)
+        case .nothing:
+            break
+        }
+    }
+
+    /// ⌘⇧⌥V — true plain paste. No Markdown parsing, no attributed import.
+    /// Useful escape hatch when auto-detection guesses wrong.
+    override func pasteAsPlainText(_ sender: Any?) {
+        guard let plain = NSPasteboard.general.string(forType: .string) else { return }
+        insertPlainAtSelection(plain)
+    }
+
+    private func insertAttributedAtSelection(_ attr: NSAttributedString) {
+        let range = selectedRange()
+        guard shouldChangeText(in: range, replacementString: attr.string) else { return }
+        textStorage?.replaceCharacters(in: range, with: attr)
+        didChangeText()
+        let end = range.location + attr.length
+        setSelectedRange(NSRange(location: end, length: 0))
+    }
+
+    private func insertPlainAtSelection(_ s: String) {
+        let range = selectedRange()
+        guard shouldChangeText(in: range, replacementString: s) else { return }
+        let attr = NSAttributedString(string: s, attributes: typingAttributes)
+        textStorage?.replaceCharacters(in: range, with: attr)
+        didChangeText()
+        let end = range.location + (s as NSString).length
+        setSelectedRange(NSRange(location: end, length: 0))
     }
 
     override func copy(_ sender: Any?) {
@@ -454,32 +491,29 @@ final class JournalTextView: NSTextView {
             super.copy(sender); return
         }
         let selected = storage.attributedSubstring(from: selectedRange())
-        let md = MarkdownSerializer.serialize(selected)
-        let rtf = try? selected.data(
-            from: NSRange(location: 0, length: selected.length),
-            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
-        )
         let pb = NSPasteboard.general
         pb.clearContents()
-        pb.setString(md, forType: .string)
-        if let rtf { pb.setData(rtf, forType: .rtf) }
+
+        // Plain visible text — what external apps get when pasting.
+        // No Markdown markers, just the rendered glyphs.
+        pb.setString(selected.string, forType: .string)
+
+        // RTF — for rich-text receivers (Mail, Pages, TextEdit, and
+        // Aura→Aura round-trip via the paste pipeline).
+        if let rtf = try? selected.data(
+            from: NSRange(location: 0, length: selected.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        ) {
+            pb.setData(rtf, forType: .rtf)
+        }
     }
 
     override func cut(_ sender: Any?) {
+        let range = selectedRange()
+        guard range.length > 0 else { return }
         copy(sender)
-        let range = selectedRange()
-        guard range.length > 0,
-              shouldChangeText(in: range, replacementString: "") else { return }
+        guard shouldChangeText(in: range, replacementString: "") else { return }
         textStorage?.deleteCharacters(in: range)
-        didChangeText()
-    }
-
-    override func pasteAsPlainText(_ sender: Any?) {
-        guard let plain = NSPasteboard.general.string(forType: .string) else { return }
-        let range = selectedRange()
-        let converted = MarkdownConverter.convert(plain, baseAttrs: typingAttributes)
-        guard shouldChangeText(in: range, replacementString: converted.string) else { return }
-        textStorage?.replaceCharacters(in: range, with: converted)
         didChangeText()
     }
 
