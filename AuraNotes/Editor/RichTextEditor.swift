@@ -113,6 +113,7 @@ struct RichTextEditor: NSViewRepresentable {
 
         scrollView.documentView = textView
         bridge?.textView = textView
+        context.coordinator.textView = textView
 
         DispatchQueue.main.async { [weak textView] in
             guard let textView, let window = textView.window else { return }
@@ -120,6 +121,14 @@ struct RichTextEditor: NSViewRepresentable {
         }
 
         return scrollView
+    }
+
+    /// SwiftUI calls this when the representable is being removed (e.g. when
+    /// the user switches entries via the `.id(persistentModelID)` reset).
+    /// Flush any pending debounced persist so the last keystrokes aren't
+    /// lost mid-flight.
+    static func dismantleNSView(_ scrollView: NSScrollView, coordinator: Coordinator) {
+        coordinator.flushPendingPersist()
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
@@ -181,8 +190,20 @@ struct RichTextEditor: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: RichTextEditor
+        weak var textView: NSTextView?
         private var writingToolsActive = false
+        private var pendingPersist: DispatchWorkItem?
+        private static let persistDebounce: TimeInterval = 0.3
+
         init(_ parent: RichTextEditor) { self.parent = parent }
+
+        deinit {
+            // Last-ditch flush for any teardown path that doesn't go through
+            // dismantleNSView. Cancels the queued work item; the synchronous
+            // persist below catches the in-memory state.
+            pendingPersist?.cancel()
+            if let tv = textView { persistImmediate(tv) }
+        }
 
         // Apple Intelligence Writing Tools — pause RTF re-serialization while
         // a session is active so streaming rewrites don't thrash the binding.
@@ -195,7 +216,7 @@ struct RichTextEditor: NSViewRepresentable {
         @available(macOS 15.0, *)
         func textViewWritingToolsDidEnd(_ textView: NSTextView) {
             writingToolsActive = false
-            persist(textView)
+            flushPendingPersist()
             ReviewPromptCoordinator.shared.recordWritingToolsAccepted(
                 using: parent.requestReview
             )
@@ -310,10 +331,35 @@ struct RichTextEditor: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             if writingToolsActive { return }
-            persist(tv)
+            schedulePersist(for: tv)
         }
 
-        private func persist(_ tv: NSTextView) {
+        /// Trailing-edge debounce: serializing a long document to RTF on every
+        /// keystroke is wasteful and stutters on big entries. We coalesce writes
+        /// into one flush ~300ms after the user stops typing.
+        private func schedulePersist(for tv: NSTextView) {
+            pendingPersist?.cancel()
+            let work = DispatchWorkItem { [weak self, weak tv] in
+                guard let self, let tv else { return }
+                self.pendingPersist = nil
+                self.persistImmediate(tv)
+            }
+            pendingPersist = work
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + Self.persistDebounce,
+                execute: work
+            )
+        }
+
+        /// Cancel any queued debounce and persist now. Called on view
+        /// dismantle (entry switch) and at the end of Writing Tools.
+        func flushPendingPersist() {
+            pendingPersist?.cancel()
+            pendingPersist = nil
+            if let tv = textView { persistImmediate(tv) }
+        }
+
+        private func persistImmediate(_ tv: NSTextView) {
             let attr = tv.attributedString()
             let fullRange = NSRange(location: 0, length: attr.length)
             let rtf = (try? attr.data(

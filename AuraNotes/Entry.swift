@@ -23,7 +23,11 @@ final class Entry {
     }
 
     var previewTitle: String {
-        for raw in text.split(whereSeparator: \.isNewline) {
+        // The sidebar only shows ~one line, so walking the whole body on
+        // every keystroke is wasted work. Cap the scan at the first chunk;
+        // the first non-empty cleaned line will almost always live here.
+        let head = text.prefix(500)
+        for raw in head.split(whereSeparator: \.isNewline) {
             let cleaned = Self.stripDecorations(String(raw))
             if !cleaned.isEmpty { return cleaned }
         }
