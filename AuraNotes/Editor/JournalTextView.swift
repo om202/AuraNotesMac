@@ -239,6 +239,18 @@ final class JournalTextView: NSTextView {
               let storage = textStorage else { return }
         let cursor = selectedRange().location
         guard cursor > 0 else { return }
+
+        // Inside an inline code run (monospace font), `*_~` and `)` are
+        // literal — don't run the bold/italic/strike/link transform. The
+        // backtick trigger still runs because typing it usually means the
+        // user is closing a code span.
+        if typed != "`",
+           let font = storage.attribute(
+            .font, at: max(0, cursor - 2), effectiveRange: nil
+           ) as? NSFont,
+           font.isFixedPitch {
+            return
+        }
         let nsString = storage.string as NSString
         let paraRange = nsString.paragraphRange(for: NSRange(location: cursor - 1, length: 0))
         let lineLen = cursor - paraRange.location
@@ -405,6 +417,17 @@ final class JournalTextView: NSTextView {
         guard selectedRange().length == 0,
               let storage = textStorage else { return false }
         let cursor = selectedRange().location
+
+        // Don't auto-list / auto-quote / auto-heading inside an inline
+        // code run — `- foo` or `# foo` typed in monospace is a literal.
+        if cursor > 0,
+           let font = storage.attribute(
+            .font, at: cursor - 1, effectiveRange: nil
+           ) as? NSFont,
+           font.isFixedPitch {
+            return false
+        }
+
         let nsString = storage.string as NSString
         let paraRange = nsString.paragraphRange(for: NSRange(location: cursor, length: 0))
 
@@ -526,19 +549,35 @@ final class JournalTextView: NSTextView {
         let pointInView = convert(event.locationInWindow, from: nil)
         let charIndex = characterIndexForInsertion(at: pointInView)
         let nsString = string as NSString
-        guard charIndex < nsString.length else {
+        guard nsString.length > 0 else {
             super.mouseDown(with: event); return
         }
 
-        let scalar = nsString.character(at: charIndex)
-        if Self.toggleableMarkers.contains(scalar) {
-            let paraStart = nsString.paragraphRange(
-                for: NSRange(location: charIndex, length: 0)
-            ).location
-            if charIndex == paraStart,
-               selectionRectInView(for: NSRange(location: charIndex, length: 1))?
-                   .contains(pointInView) == true {
-                toggleTodoCharacter(at: charIndex)
+        // Find the paragraph the click lands in. We don't require the
+        // exact glyph index — TextKit 2 commonly returns a charIndex one
+        // off the marker, especially at the right edge of the glyph.
+        let probe = max(0, min(charIndex, nsString.length - 1))
+        let paraStart = nsString.paragraphRange(
+            for: NSRange(location: probe, length: 0)
+        ).location
+        let firstChar = nsString.character(at: paraStart)
+        guard Self.toggleableMarkers.contains(firstChar) else {
+            super.mouseDown(with: event); return
+        }
+
+        // Hit-test against the marker's rect with horizontal slop so the
+        // click is forgiving along the full marker column.
+        if let glyphRect = selectionRectInView(
+            for: NSRange(location: paraStart, length: 1)
+        ), glyphRect.height > 0 {
+            let hitRect = NSRect(
+                x: glyphRect.minX - 4,
+                y: glyphRect.minY - 2,
+                width: glyphRect.width + 16,
+                height: glyphRect.height + 4
+            )
+            if hitRect.contains(pointInView) {
+                toggleTodoCharacter(at: paraStart)
                 return
             }
         }
