@@ -134,7 +134,7 @@ actor DictationService {
         guard let pipeline else { throw DictationError.audioEngine("no pipeline") }
         pipeline.prepare(sourceFormat: inputFormat)
 
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat) { buffer, _ in
             pipeline.feed(buffer)
         }
 

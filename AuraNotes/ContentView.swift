@@ -241,10 +241,18 @@ private struct EntryEditor: View {
                 }
         }
         .overlay(alignment: .bottom) {
-            EditorToolbar(bridge: bridge)
-                .padding(.bottom, Theme.Space.l)
-                .padding(.horizontal, Theme.Space.l)
-                .zIndex(1000)
+            VStack(spacing: Theme.Space.m) {
+                if bridge.dictation.isRecording, !bridge.dictation.liveText.isEmpty {
+                    DictationBanner(text: bridge.dictation.liveText)
+                        .transition(.opacity)
+                }
+                EditorToolbar(bridge: bridge)
+                    .padding(.horizontal, Theme.Space.l)
+            }
+            .padding(.bottom, Theme.Space.l)
+            .zIndex(1000)
+            .animation(.spring(response: 0.42, dampingFraction: 0.85),
+                       value: bridge.dictation.isRecording)
         }
         .navigationTitle(titleLine)
         .navigationSubtitle(metadataLine)
@@ -347,6 +355,11 @@ private struct EntryEditor: View {
                             Circle()
                                 .fill(Color(red: 255/255, green: 117/255, blue: 31/255))
                         )
+                        .overlay {
+                            if bridge.dictation.isRecording {
+                                RotatingRing()
+                            }
+                        }
                 }
                 .buttonStyle(.plain)
                 .help(bridge.dictation.isRecording
@@ -380,4 +393,57 @@ private var metadataLine: String {
 #Preview {
     ContentView()
         .modelContainer(for: Entry.self, inMemory: true)
+}
+
+/// Live-captions strip shown above the editor toolbar while dictating.
+/// Full-width, with a softly drifting orange mesh-gradient that reads
+/// like cloud cover lit at sunset.
+private struct DictationBanner: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Color(red: 255/255, green: 117/255, blue: 31/255).opacity(0.6))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.horizontal, Theme.Space.l)
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0.00),
+                        .init(color: .black, location: 0.70),
+                        .init(color: .clear, location: 1.00)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .animation(.easeOut(duration: 0.15), value: text)
+    }
+}
+
+/// White arc tracing the circumference of the mic button, rotating
+/// continuously. A faint full ring sits underneath so the orange disc
+/// always reads as bordered.
+private struct RotatingRing: View {
+    @State private var rotation: Angle = .degrees(-90)
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .strokeBorder(.white.opacity(0.25), lineWidth: 2)
+
+            Circle()
+                .trim(from: 0.0, to: 0.28)
+                .stroke(.white, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .rotationEffect(rotation)
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
+                rotation = .degrees(270)
+            }
+        }
+    }
 }

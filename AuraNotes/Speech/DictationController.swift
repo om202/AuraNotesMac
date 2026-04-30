@@ -15,12 +15,14 @@ import Observation
 @MainActor
 final class DictationController {
     private(set) var isRecording = false
+    private(set) var liveText: String = ""
     var lastError: String?
 
     @ObservationIgnored private let service = DictationService()
     @ObservationIgnored weak var bridge: EditorBridge?
     @ObservationIgnored private var volatileRange: NSRange?
     @ObservationIgnored private var liveTask: Task<Void, Never>?
+    @ObservationIgnored private var committedText: String = ""
 
     func toggle() {
         if isRecording {
@@ -44,6 +46,8 @@ final class DictationController {
         }
 
         volatileRange = NSRange(location: tv.selectedRange().location, length: 0)
+        committedText = ""
+        liveText = ""
         isRecording = true
         lastError = nil
 
@@ -67,6 +71,8 @@ final class DictationController {
         guard isRecording else { return }
         isRecording = false
         volatileRange = nil
+        committedText = ""
+        liveText = ""
         let svc = service
         Task { try? await svc.stop() }
         liveTask?.cancel()
@@ -110,6 +116,7 @@ final class DictationController {
             // will overwrite it in place.
             volatileRange = NSRange(location: range.location, length: insertedLength)
         }
+        liveText = text
         tv.setSelectedRange(NSRange(location: cursor, length: 0))
         tv.scrollRangeToVisible(NSRange(location: cursor, length: 0))
     }
