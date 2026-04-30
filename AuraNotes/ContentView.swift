@@ -339,19 +339,26 @@ private struct EntryEditor: View {
                 Button {
                     bridge.dictation.toggle()
                 } label: {
-                    Image(systemName: bridge.dictation.isRecording ? "mic.fill" : "mic")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 32, height: 32)
-                        .background(
-                            Circle()
-                                .fill(Color(red: 255/255, green: 117/255, blue: 31/255))
-                        )
-                        .overlay {
-                            if bridge.dictation.isRecording {
-                                RotatingRing()
-                            }
+                    Group {
+                        if bridge.dictation.isRecording {
+                            Image(systemName: "waveform")
+                                .symbolEffect(.variableColor.iterative, options: .repeat(.continuous))
+                        } else {
+                            Image(systemName: "mic")
                         }
+                    }
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(
+                        Circle()
+                            .fill(Color(red: 255/255, green: 117/255, blue: 31/255))
+                    )
+                    .overlay {
+                        if bridge.dictation.isRecording {
+                            RotatingRing()
+                        }
+                    }
                 }
                 .buttonStyle(.plain)
                 .help(bridge.dictation.isRecording
