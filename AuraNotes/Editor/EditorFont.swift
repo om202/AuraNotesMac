@@ -69,9 +69,17 @@ enum EditorFontFamily: String, CaseIterable, Identifiable {
         let traits = old.fontDescriptor.symbolicTraits
         let oldScale = EditorFontFamily.family(of: old)?.sizeScale ?? 1
         let logicalSize = old.pointSize / oldScale
+
+        // Bold can come through as either a symbolic trait or a heavier
+        // weight in the descriptor's traits dict. Treat either as bold so
+        // family swaps don't quietly drop emphasis.
+        let isBold = traits.contains(.bold)
+            || old.editorWeight.rawValue >= NSFont.Weight.semibold.rawValue
+        let weight: NSFont.Weight = isBold ? .bold : old.editorWeight
+
         return font(
             size: logicalSize,
-            weight: old.editorWeight,
+            weight: weight,
             italic: traits.contains(.italic)
         )
     }

@@ -64,6 +64,12 @@ enum RichTextCommand {
     // MARK: Headings
 
     /// level 0 = body, 1 = title, 2 = heading, 3 = subheading.
+    ///
+    /// Walks every `.font` run in the affected paragraph and rebuilds the
+    /// font with the heading's size and weight while preserving the run's
+    /// own italic/monospace traits. A run that was already bold stays
+    /// bold even when targeting a non-bold heading level — so a bold word
+    /// inside a subheading still reads bolder than its neighbors.
     static func setHeadingLevel(_ tv: NSTextView, level: Int) {
         let (size, weight): (CGFloat, NSFont.Weight) = {
             switch level {
@@ -73,24 +79,73 @@ enum RichTextCommand {
             default: return (Theme.FontSize.body, .regular)
             }
         }()
-        let newFont = EditorFont.currentFamily.font(size: size, weight: weight)
         let newColor = headingColor(for: level)
+        let family = EditorFont.currentFamily
+        let bodyFallback = family.font(size: Theme.FontSize.body)
 
         let nsString = tv.string as NSString
         let paraRange = nsString.paragraphRange(for: tv.selectedRange)
-        guard tv.shouldChangeText(in: paraRange, replacementString: nil) else { return }
+        guard paraRange.length >= 0,
+              tv.shouldChangeText(in: paraRange, replacementString: nil) else { return }
         let storage = tv.textStorage!
         storage.beginEditing()
-        storage.addAttribute(.font, value: newFont, range: paraRange)
-        storage.addAttribute(.foregroundColor, value: newColor, range: paraRange)
+
+        if paraRange.length > 0 {
+            storage.enumerateAttribute(.font, in: paraRange, options: []) { value, range, _ in
+                let old = (value as? NSFont) ?? bodyFallback
+                let mapped = headingMappedFont(
+                    old: old, targetSize: size, targetWeight: weight, family: family
+                )
+                storage.addAttribute(.font, value: mapped, range: range)
+            }
+            storage.addAttribute(.foregroundColor, value: newColor, range: paraRange)
+        }
         storage.endEditing()
         tv.didChangeText()
 
-        // Update typing attributes so the next keystroke continues the style
+        // Update typing attributes so the next keystroke continues the style.
         var typing = tv.typingAttributes
-        typing[.font] = newFont
+        let typingOld = (typing[.font] as? NSFont) ?? bodyFallback
+        typing[.font] = headingMappedFont(
+            old: typingOld, targetSize: size, targetWeight: weight, family: family
+        )
         typing[.foregroundColor] = newColor
         tv.typingAttributes = typing
+    }
+
+    /// Build a font at the heading's target size/weight while preserving
+    /// the source run's italic + monospace traits and any "bolder than
+    /// target" weight.
+    private static func headingMappedFont(
+        old: NSFont,
+        targetSize: CGFloat,
+        targetWeight: NSFont.Weight,
+        family: EditorFontFamily
+    ) -> NSFont {
+        let oldTraits = old.fontDescriptor.symbolicTraits
+        let italic = oldTraits.contains(.italic)
+        let mono = oldTraits.contains(.monoSpace)
+
+        // If the run was already bolder than the target, keep it bold so
+        // it remains visually distinguished within the new style.
+        let runIsBold = oldTraits.contains(.bold)
+            || old.editorWeight.rawValue >= NSFont.Weight.semibold.rawValue
+        let effectiveWeight: NSFont.Weight =
+            (runIsBold && targetWeight.rawValue < NSFont.Weight.bold.rawValue)
+            ? .bold
+            : targetWeight
+
+        if mono {
+            var f = NSFont.monospacedSystemFont(ofSize: targetSize, weight: effectiveWeight)
+            if italic,
+               let italicized = NSFont(
+                descriptor: f.fontDescriptor.withSymbolicTraits(.italic),
+                size: targetSize) {
+                f = italicized
+            }
+            return f
+        }
+        return family.font(size: targetSize, weight: effectiveWeight, italic: italic)
     }
 
     static func headingColor(for level: Int) -> NSColor {
@@ -480,28 +535,93 @@ enum RichTextCommand {
 
     // MARK: Font scaling
 
+    /// Per-run "what size was this before the user started scaling" memory.
+    /// Lets ⌘− then ⌘+ return exactly to the original size instead of
+    /// drifting after a clamp at the floor.
+    static let editorBaseSize = NSAttributedString.Key("auraEditorBaseSize")
+    /// Number of scale steps applied since the base size was captured.
+    static let editorScaleSteps = NSAttributedString.Key("auraEditorScaleSteps")
+
+    private static let scaleStepFactor: CGFloat = 1.1
+    private static let minFontSize: CGFloat = 8
+    private static let maxFontSize: CGFloat = 96
+
+    /// Scale all fonts up (`factor > 1`) or down (`factor < 1`). The actual
+    /// magnitude is fixed at `scaleStepFactor` per call; the parameter is
+    /// only consulted for direction. Each run remembers the size it had
+    /// before the first scale, so ⌘− at the floor followed by ⌘+ recovers
+    /// the original size.
     static func scaleFonts(in tv: NSTextView, by factor: CGFloat) {
-        let clampSize: (CGFloat) -> CGFloat = { max(8, min(96, $0 * factor)) }
+        let direction: Int = factor > 1 ? 1 : (factor < 1 ? -1 : 0)
+        guard direction != 0 else { return }
 
         if let storage = tv.textStorage {
             let full = NSRange(location: 0, length: storage.length)
             if full.length > 0, tv.shouldChangeText(in: full, replacementString: nil) {
                 storage.beginEditing()
-                storage.enumerateAttribute(.font, in: full, options: []) { value, range, _ in
-                    let f = (value as? NSFont) ?? NSFont.systemFont(ofSize: Theme.FontSize.body)
-                    let newFont = NSFont(descriptor: f.fontDescriptor, size: clampSize(f.pointSize)) ?? f
-                    storage.addAttribute(.font, value: newFont, range: range)
+                var loc = 0
+                while loc < storage.length {
+                    var effective = NSRange()
+                    let f = (storage.attribute(
+                        .font, at: loc, longestEffectiveRange: &effective, in: full
+                    ) as? NSFont) ?? NSFont.systemFont(ofSize: Theme.FontSize.body)
+
+                    let prevBase = (storage.attribute(
+                        editorBaseSize, at: loc, effectiveRange: nil
+                    ) as? NSNumber)?.doubleValue
+                    let prevSteps = (storage.attribute(
+                        editorScaleSteps, at: loc, effectiveRange: nil
+                    ) as? NSNumber)?.intValue
+
+                    let base = prevBase.map { CGFloat($0) } ?? f.pointSize
+                    let steps = prevSteps ?? 0
+                    let newSteps = clampedScaleSteps(base: base, desired: steps + direction)
+                    let newSize = scaledFontSize(base: base, steps: newSteps)
+                    let newFont = NSFont(descriptor: f.fontDescriptor, size: newSize) ?? f
+
+                    storage.addAttribute(.font, value: newFont, range: effective)
+                    storage.addAttribute(editorBaseSize,
+                                         value: NSNumber(value: Double(base)),
+                                         range: effective)
+                    storage.addAttribute(editorScaleSteps,
+                                         value: NSNumber(value: newSteps),
+                                         range: effective)
+                    loc = NSMaxRange(effective)
                 }
                 storage.endEditing()
                 tv.didChangeText()
             }
         }
 
+        // Typing attributes mirror the run-level bookkeeping.
         var typing = tv.typingAttributes
         if let f = typing[.font] as? NSFont {
-            typing[.font] = NSFont(descriptor: f.fontDescriptor, size: clampSize(f.pointSize)) ?? f
+            let base = (typing[editorBaseSize] as? NSNumber)
+                .map { CGFloat($0.doubleValue) } ?? f.pointSize
+            let steps = (typing[editorScaleSteps] as? NSNumber)?.intValue ?? 0
+            let newSteps = clampedScaleSteps(base: base, desired: steps + direction)
+            let newSize = scaledFontSize(base: base, steps: newSteps)
+            typing[.font] = NSFont(descriptor: f.fontDescriptor, size: newSize) ?? f
+            typing[editorBaseSize] = NSNumber(value: Double(base))
+            typing[editorScaleSteps] = NSNumber(value: newSteps)
             tv.typingAttributes = typing
         }
+    }
+
+    private static func scaledFontSize(base: CGFloat, steps: Int) -> CGFloat {
+        let raw = base * pow(scaleStepFactor, CGFloat(steps))
+        return max(minFontSize, min(maxFontSize, raw))
+    }
+
+    /// Clamp `desired` to the range of step counts that actually change
+    /// the rendered size — going further in the same direction beyond
+    /// these bounds is a visual no-op, so we don't accumulate phantom
+    /// steps the user would have to "undo" before the size moves again.
+    private static func clampedScaleSteps(base: CGFloat, desired: Int) -> Int {
+        let logFactor = log(scaleStepFactor)
+        let minSteps = Int(ceil(log(minFontSize / base) / logFactor))
+        let maxSteps = Int(floor(log(maxFontSize / base) / logFactor))
+        return max(minSteps, min(maxSteps, desired))
     }
 
     // MARK: Undo / Redo
