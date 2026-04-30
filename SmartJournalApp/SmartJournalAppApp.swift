@@ -25,7 +25,12 @@ struct SmartJournalAppApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .frame(
+                    minWidth: 880, idealWidth: 1200,
+                    minHeight: 600, idealHeight: 820
+                )
         }
         .modelContainer(sharedModelContainer)
+        .windowResizability(.contentMinSize)
     }
 }
