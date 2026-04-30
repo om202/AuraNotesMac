@@ -440,7 +440,12 @@ final class JournalTextView: NSTextView {
         default: break
         }
         if line.range(of: #"^\d+\.$"#, options: .regularExpression) != nil {
-            return { RichTextCommand.toggleNumberedList($0) }
+            // Honor the typed starting number ("5. " → list begins at 5).
+            // If there's an adjacent numbered run above, the post-toggle
+            // renumber will absorb this paragraph into the existing run
+            // and override the typed value.
+            let parsed = Int(line.dropLast()) ?? 1
+            return { RichTextCommand.toggleNumberedList($0, startingAt: parsed) }
         }
         return nil
     }

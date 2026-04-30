@@ -193,6 +193,7 @@ struct RichTextEditor: NSViewRepresentable {
         weak var textView: NSTextView?
         private var writingToolsActive = false
         private var pendingPersist: DispatchWorkItem?
+        private var renumberInProgress = false
         private static let persistDebounce: TimeInterval = 0.3
 
         init(_ parent: RichTextEditor) { self.parent = parent }
@@ -325,12 +326,27 @@ struct RichTextEditor: NSViewRepresentable {
             // Keep typing-attribute font at base (the bullet glyph uses a
             // larger size that we don't want bleeding into typed text).
             tv.typingAttributes = baseAttrs
+
+            // Numbered lists: ensure the new item's number is in sequence
+            // with what came before. The textDidChange hook will also fire
+            // a renumber pass, but doing it inline keeps the cursor's
+            // visual context correct on the very first paint.
+            if case .numbered = detected {
+                RichTextCommand.renumberAroundLocation(in: tv, location: newLoc)
+            }
             return true
         }
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
             if writingToolsActive { return }
+            if !renumberInProgress {
+                renumberInProgress = true
+                tv.textStorage?.beginEditing()
+                RichTextCommand.renumberAroundCursor(in: tv)
+                tv.textStorage?.endEditing()
+                renumberInProgress = false
+            }
             schedulePersist(for: tv)
         }
 

@@ -163,8 +163,8 @@ enum RichTextCommand {
         applyLinePrefix(tv, kind: .bullet)
     }
 
-    static func toggleNumberedList(_ tv: NSTextView) {
-        applyLinePrefix(tv, kind: .numbered)
+    static func toggleNumberedList(_ tv: NSTextView, startingAt: Int = 1) {
+        applyLinePrefix(tv, kind: .numbered, startingAt: max(1, startingAt))
     }
 
     static func toggleTodoList(_ tv: NSTextView) {
@@ -296,7 +296,7 @@ enum RichTextCommand {
         return 0
     }
 
-    private static func applyLinePrefix(_ tv: NSTextView, kind: ListKind) {
+    private static func applyLinePrefix(_ tv: NSTextView, kind: ListKind, startingAt: Int = 1) {
         let storage = tv.textStorage!
         let nsString = storage.string as NSString
         let paraRange = nsString.paragraphRange(for: tv.selectedRange)
@@ -321,7 +321,7 @@ enum RichTextCommand {
         let allMatch = !nonEmpty.isEmpty && nonEmpty.allSatisfy { kind.matches(originalNS.substring(with: $0)) }
 
         let result = NSMutableAttributedString()
-        var itemNumber = 1
+        var itemNumber = startingAt
 
         for pr in paragraphs {
             let para = (original.attributedSubstring(from: pr).mutableCopy() as! NSMutableAttributedString)
@@ -367,6 +367,122 @@ enum RichTextCommand {
 
         storage.replaceCharacters(in: paraRange, with: result)
         tv.didChangeText()
+
+        // After applying numbered prefixes, merge with any adjacent numbered
+        // run above so the visible sequence is continuous.
+        if kind == .numbered {
+            renumberAroundLocation(in: tv, location: paraRange.location)
+        }
+    }
+
+    // MARK: Numbered list renumbering
+
+    /// Walks the contiguous numbered-paragraph run that contains `location`
+    /// and rewrites each marker so the sequence is continuous, starting
+    /// from whatever number the first surviving item carries. A no-op if
+    /// `location` doesn't sit inside a numbered paragraph.
+    static func renumberAroundLocation(in tv: NSTextView, location: Int) {
+        guard let storage = tv.textStorage else { return }
+        renumberRun(in: storage, around: location)
+    }
+
+    /// Probes the cursor and the position just before it. Two probes
+    /// catches the common "delete joined two paragraphs" case where the
+    /// cursor lands on the merged paragraph but the affected run starts
+    /// before it.
+    static func renumberAroundCursor(in tv: NSTextView) {
+        guard let storage = tv.textStorage, storage.length > 0 else { return }
+        let cursor = tv.selectedRange.location
+        renumberRun(in: storage, around: max(0, min(cursor, storage.length - 1)))
+        if cursor > 0 {
+            renumberRun(in: storage, around: max(0, cursor - 1))
+        }
+    }
+
+    private static func renumberRun(in storage: NSTextStorage, around location: Int) {
+        let initialNS = storage.string as NSString
+        guard initialNS.length > 0,
+              location >= 0, location < initialNS.length else { return }
+
+        let here = initialNS.paragraphRange(for: NSRange(location: location, length: 0))
+        let hereLine = stripTrailingNewline(initialNS.substring(with: here))
+        guard isNumberedLine(hereLine) else { return }
+
+        // Walk up to find the start of the contiguous numbered run.
+        var runStart = here.location
+        while runStart > 0 {
+            let prevPara = initialNS.paragraphRange(
+                for: NSRange(location: runStart - 1, length: 0)
+            )
+            let prevLine = stripTrailingNewline(initialNS.substring(with: prevPara))
+            if isNumberedLine(prevLine) {
+                runStart = prevPara.location
+            } else {
+                break
+            }
+        }
+
+        // The first surviving item's number defines the start.
+        let firstPara = initialNS.paragraphRange(
+            for: NSRange(location: runStart, length: 0)
+        )
+        let firstLine = stripTrailingNewline(initialNS.substring(with: firstPara))
+        let startNumber = max(1, parseLeadingNumber(firstLine) ?? 1)
+
+        // Walk forward, rewriting each marker. We re-fetch the live string
+        // every iteration because the storage shifts as digits change.
+        var counter = startNumber
+        var loc = runStart
+        while loc < storage.length {
+            let curNS = storage.string as NSString
+            guard loc < curNS.length else { break }
+            let pr = curNS.paragraphRange(for: NSRange(location: loc, length: 0))
+            let line = stripTrailingNewline(curNS.substring(with: pr))
+            guard isNumberedLine(line) else { break }
+
+            let lineNS = line as NSString
+            let dotRange = lineNS.range(of: ".")
+            if dotRange.location != NSNotFound, dotRange.location > 0 {
+                let digitsRange = NSRange(
+                    location: pr.location, length: dotRange.location
+                )
+                let curDigits = curNS.substring(with: digitsRange)
+                let newDigits = "\(counter)"
+                if curDigits != newDigits {
+                    let attrs = storage.attributes(
+                        at: digitsRange.location, effectiveRange: nil
+                    )
+                    storage.replaceCharacters(
+                        in: digitsRange,
+                        with: NSAttributedString(string: newDigits, attributes: attrs)
+                    )
+                }
+            }
+            let updatedNS = storage.string as NSString
+            guard loc < updatedNS.length else { break }
+            let updatedPr = updatedNS.paragraphRange(
+                for: NSRange(location: loc, length: 0)
+            )
+            loc = updatedPr.location + updatedPr.length
+            counter += 1
+        }
+    }
+
+    private static func stripTrailingNewline(_ s: String) -> String {
+        s.hasSuffix("\n") ? String(s.dropLast()) : s
+    }
+
+    private static func isNumberedLine(_ s: String) -> Bool {
+        let range = NSRange(s.startIndex..., in: s)
+        return ListKind.numberRegex.firstMatch(in: s, range: range) != nil
+    }
+
+    private static func parseLeadingNumber(_ s: String) -> Int? {
+        var digits = ""
+        for c in s {
+            if c.isNumber { digits.append(c) } else { break }
+        }
+        return Int(digits)
     }
 
     // MARK: Quote
